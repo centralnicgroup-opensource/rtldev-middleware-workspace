@@ -1,0 +1,10 @@
+# Line endings: normalise in the repository, check out LF everywhere. Without this, a
+# Windows clone rewrites the scripts in scripts/ to CRLF and they stop being executable
+# inside the container.
+* text=auto eol=lf
+
+# No export-ignore section here, unlike rtldev-middleware-template's: this repository
+# is never published as a package, so there is no distribution archive to keep clean.
+
+# Diff hunk headers for the shell scripts that make up the tooling.
+*.sh diff=bash

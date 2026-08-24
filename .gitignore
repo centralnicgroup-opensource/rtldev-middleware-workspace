@@ -1,0 +1,21 @@
+# Dependencies
+node_modules
+.pnpm-store
+
+# Editor and OS noise
+.DS_Store
+Thumbs.db
+*.swp
+
+# Claude Code — local user settings (personal overrides, MCP permissions).
+# .claude/settings.json IS committed; only the .local variant is personal.
+.claude/settings.local.json
+
+# Scratch output from bulk operations. `ws.sh foreach 'something > $WS_ROOT/out/...'`
+# is a common way to collect per-repository reports, and those reports are never
+# something this repository should carry.
+/out/
+*.log
+
+# NOTE: repos/ is deliberately absent. Those directories are submodules — git tracks
+# them as gitlinks, and ignoring the path would break `git submodule` entirely.

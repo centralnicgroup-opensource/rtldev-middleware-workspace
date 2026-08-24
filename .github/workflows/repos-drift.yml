@@ -1,0 +1,51 @@
+---
+# Reports rtldev-middleware-* repositories that exist on GitHub but are not registered
+# as submodules here — and registered ones that have since been archived, made private,
+# renamed or deleted.
+#
+# This is the failure mode that makes a workspace quietly wrong rather than broken: a
+# new repository is created, nobody adds it here, and every subsequent "apply this to
+# all our repositories" silently covers all but that one. Nothing in the workspace
+# would report it, because the register is internally consistent — it is just
+# incomplete.
+#
+# Read-only: it runs `ws.sh add` in its default check mode, which never writes.
+# Registering stays a commit someone makes, because a new repository may deliberately
+# not belong here.
+name: Repository register drift
+
+on:
+  schedule:
+    # Monday morning, so a new repository is picked up at the start of the week.
+    - cron: "30 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  drift:
+    name: Register drift
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      # GITHUB_TOKEN is enough: the query is `GET /orgs/{org}/repos?type=public`, which
+      # needs no scope beyond public read. gh is preinstalled on the runner and ws.sh
+      # prefers it when authenticated, purely for the higher rate limit.
+      - name: Compare the register against GitHub
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          ./scripts/ws.sh add | tee register.txt
+
+          # `add` is a report, not a gate — it exits 0 whatever it finds, so the job has
+          # to decide. Unregistered repositories fail the run; that is the whole signal.
+          if grep -q 'are not registered' register.txt; then
+            echo "::error::New repositories are missing from the register. Run ./scripts/ws.sh add --apply and commit."
+            exit 1
+          fi
+          if grep -q 'no longer qualify' register.txt; then
+            echo "::warning::Some registered repositories are archived, private or gone — see the log."
+          fi

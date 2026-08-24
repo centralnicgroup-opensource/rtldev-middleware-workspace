@@ -1,0 +1,12 @@
+# The submodule checkouts. This is the single most important entry in this file: each
+# repository under repos/ has its own prettier configuration, its own ignore list and
+# its own formatting history, so formatting them from here would rewrite thousands of
+# files against the wrong config — and `prettier --check .` in CI would fail on a
+# populated workspace for changes nobody made in it.
+#
+# Format those files by running prettier in the repository that owns them:
+#   ./scripts/ws.sh foreach 'pnpm prettier:fix'
+repos/
+
+node_modules/
+pnpm-lock.yaml

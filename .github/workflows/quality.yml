@@ -1,0 +1,141 @@
+name: Quality
+"on":
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Same language-agnostic gate as rtldev-middleware-template's, plus one job this
+# repository needs and no other does: a consistency check on the submodule register.
+#
+# Note what is NOT here: nothing checks out the submodules. Every job runs against a
+# bare checkout, so repos/ is empty and prettier/shellcheck see only this repository's
+# own files. That is deliberate — the code in those repositories is gated by their own
+# CI, and re-linting it here would both duplicate that and fail on findings this
+# repository cannot fix.
+jobs:
+  prettier:
+    name: Prettier
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v6
+        with:
+          node-version: lts/*
+      - name: Check formatting
+        run: npx --yes prettier@3 --check .
+
+  actionlint:
+    name: Actionlint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Actionlint
+        uses: reviewdog/action-actionlint@v1
+        with:
+          reporter: github-pr-check
+          fail_level: error
+
+  shellcheck:
+    name: ShellCheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      # `git ls-files` rather than `find`: it lints only tracked files, needs no prune
+      # list for node_modules/ or .husky/_/, and — the reason it matters here — it does
+      # not descend into the submodules, whose scripts belong to their own repositories.
+      #
+      # .husky/pre-commit is named explicitly because it has no `.sh` extension.
+      - name: ShellCheck
+        run: |
+          git ls-files -z '*.sh' .husky/pre-commit \
+            | xargs -0 --no-run-if-empty shellcheck --severity=warning
+          echo "ShellCheck completed."
+
+  register:
+    name: Submodule register
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      # The register can break in ways that are invisible until someone runs `sync` and
+      # gets a confusing failure, because .gitmodules and the index are two separate
+      # files that a hand-edit can put out of step:
+      #
+      #   * a .gitmodules entry with no gitlink in the index — `sync` silently does
+      #     nothing for that repository, and a bulk edit quietly covers one repo fewer;
+      #   * a gitlink with no .gitmodules entry — git cannot know where to clone from;
+      #   * a url or path that does not follow the convention the scripts assume.
+      #
+      # None of these are caught by prettier or shellcheck, and all three are cheap to
+      # check without cloning anything.
+      - name: Check .gitmodules against the index
+        run: |
+          set -euo pipefail
+          fail=0
+
+          # Every .gitmodules entry must have a matching gitlink (mode 160000).
+          while read -r path; do
+            [ -n "$path" ] || continue
+            case "$path" in
+              repos/rtldev-middleware-*) ;;
+              *)
+                echo "::error::submodule path outside the repos/rtldev-middleware-* convention: $path"
+                fail=1
+                ;;
+            esac
+            mode=$(git ls-files --stage -- "$path" | awk '{print $1}')
+            if [ "$mode" != "160000" ]; then
+              echo "::error::$path is in .gitmodules but has no gitlink in the index"
+              fail=1
+            fi
+            url=$(git config --file .gitmodules --get "submodule.$path.url")
+            expected="https://github.com/centralnicgroup-opensource/$(basename "$path").git"
+            if [ "$url" != "$expected" ]; then
+              echo "::error::$path url is '$url', expected '$expected'"
+              fail=1
+            fi
+            if ! git config --file .gitmodules --get "submodule.$path.branch" >/dev/null; then
+              echo "::error::$path has no branch recorded — ws.sh pull and branch need it"
+              fail=1
+            fi
+          done < <(git config --file .gitmodules --get-regexp '^submodule\..*\.path$' | awk '{print $2}')
+
+          # And the reverse: every gitlink must be described in .gitmodules.
+          while read -r path; do
+            [ -n "$path" ] || continue
+            if ! git config --file .gitmodules --get "submodule.$path.url" >/dev/null; then
+              echo "::error::$path is a gitlink with no .gitmodules entry"
+              fail=1
+            fi
+          done < <(git ls-files --stage | awk '$1 == "160000" {print $4}')
+
+          count=$(git config --file .gitmodules --get-regexp '^submodule\..*\.path$' | wc -l)
+          echo "Register consistent: $count repositories."
+          exit $fail
+
+  ci-success:
+    name: "Quality: completed"
+    needs: [prettier, actionlint, shellcheck, register]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check results
+        # Single quotes inside the expression because GitHub expressions have no
+        # double-quoted string literal, and `tr` splits the space-joined results onto
+        # one line each — against a single line `grep -vw success` selects nothing as
+        # long as the word appears anywhere, which is the one outcome this job exists
+        # to catch.
+        run: |
+          if echo '${{ join(needs.*.result, ' ') }}' | tr ' ' '\n' | grep -qvw success; then
+            echo "One or more quality jobs failed: ${{ join(needs.*.result, ' ') }}"
+            exit 1
+          fi

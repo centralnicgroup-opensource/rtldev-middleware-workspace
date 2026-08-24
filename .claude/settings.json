@@ -1,0 +1,61 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(gh pr view *)",
+      "Bash(gh pr list *)",
+      "Bash(gh pr checks *)",
+      "Bash(gh pr create *)",
+      "Bash(gh issue view *)",
+      "Bash(gh issue list *)",
+      "Bash(gh run view *)",
+      "Bash(gh run list *)",
+      "Bash(gh repo view *)",
+      "Bash(git status *)",
+      "Bash(git log *)",
+      "Bash(git diff *)",
+      "Bash(git branch)",
+      "Bash(git branch -a)",
+      "Bash(git branch -r)",
+      "Bash(git branch -v)",
+      "Bash(git branch -vv)",
+      "Bash(git branch --list)",
+      "Bash(git branch --show-current)",
+      "Bash(git show *)",
+      "Bash(git stash list *)",
+      "Bash(git submodule status *)",
+      "Bash(git submodule summary *)",
+      "Bash(git ls-remote *)",
+      "Bash(./scripts/ws.sh status *)",
+      "Bash(./scripts/ws.sh status)",
+      "Bash(./scripts/ws.sh grep *)",
+      "Bash(./scripts/ws.sh add)",
+      "Bash(./scripts/ws.sh sync *)",
+      "Bash(./scripts/ws.sh pull *)",
+      "Bash(./scripts/ws.sh help)"
+    ]
+  },
+  "env": {
+    "BASH_MAX_OUTPUT_LENGTH": "30000",
+    "MAX_MCP_OUTPUT_TOKENS": "25000"
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/tool-output-hygiene.sh\"",
+            "timeout": 5,
+            "statusMessage": "Checking tool-output hygiene"
+          },
+          {
+            "type": "command",
+            "command": "command -v rtk >/dev/null 2>&1 && exec rtk hook claude || exit 0",
+            "statusMessage": "Optimizing command output (RTK)"
+          }
+        ]
+      }
+    ]
+  }
+}

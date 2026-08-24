@@ -1,0 +1,65 @@
+{
+  // LIVE devcontainer for the workspace repository.
+  //
+  // Same frame as rtldev-middleware-template's single-container shape, with the
+  // differences a workspace needs spelled out below. Everything shared still comes
+  // from the devbase Feature — referenced by version, never copied.
+  //
+  // What is deliberately NOT here: language runtimes. A workspace checkout can hold
+  // PHP, Go, Java, Python and Node repositories at once, and installing all five to
+  // cover them would produce a slow, enormous image whose versions drift from the
+  // ones each repository actually pins. Per-repository work belongs in that
+  // repository's own devcontainer — open `repos/<name>` as its own container, which
+  // works because every submodule ships one. This container is for the operations
+  // that span repositories: git, gh, ripgrep, sed, and the scripts in ./scripts.
+  "name": "rtldev-middleware-workspace",
+  "build": {
+    "context": ".",
+    "dockerfile": "Dockerfile"
+  },
+
+  "workspaceMount": "source=${localWorkspaceFolder},target=/usr/share/${localWorkspaceFolderBasename},type=bind,consistency=cached",
+  "workspaceFolder": "/usr/share/${localWorkspaceFolderBasename}",
+  "shutdownAction": "stopContainer",
+
+  // Host-side preflight for the binds at the bottom of this file: Docker creates a
+  // missing bind source itself, as a root-owned *directory* — which for ~/.gitconfig
+  // means a directory where git expects a file, on the host, outliving the container.
+  "initializeCommand": {
+    "claude-state": "mkdir -p ${localEnv:HOME}/.claude",
+    "ssh-dir": "mkdir -p ${localEnv:HOME}/.ssh",
+    "gitconfig": "touch ${localEnv:HOME}/.gitconfig"
+  },
+
+  "features": {
+    // The shared behaviour layer: zsh with the team prompt, commitizen, pnpm, the gh
+    // credential helper, persistent shell history, dependency installation, the
+    // on-attach banner, and the RTK binary the committed .claude/settings.json hook
+    // looks for. It pulls in Node LTS, the GitHub CLI and the Claude Code CLI as its
+    // own Feature dependencies, so none of the three is listed here.
+    "ghcr.io/centralnicgroup-opensource/rtldev-middleware-devcontainer-features/devbase:1": {}
+  },
+
+  "remoteUser": "vscode",
+
+  // Reports which submodules are populated and which are still empty, so an attach
+  // never leaves you guessing whether `repos/foo` is missing or just uninitialised.
+  // Deliberately does not clone anything: the full set is ~2.4 GB and which repos you
+  // want is a per-session decision. `./scripts/ws.sh sync <repo>...` is the clone step.
+  "postAttachCommand": {
+    "workspace-status": "bash .devcontainer/post-attach.sh"
+  },
+
+  // .ssh and .gitconfig make git work as it does on the host — load-bearing here,
+  // because every submodule operation talks to GitHub. /WSL_USER is what devbase's
+  // history persistence reads; .claude carries Claude Code session state.
+  //
+  // The ${localEnv:HOME}${localEnv:USERPROFILE} concatenation resolves to whichever of
+  // the two the host defines.
+  "mounts": [
+    "source=${localEnv:HOME}/.ssh,target=/home/vscode/.ssh,type=bind,readonly",
+    "source=${localEnv:HOME}/.gitconfig,target=/home/vscode/.gitconfig,type=bind,consistency=cached",
+    "source=${localEnv:HOME}${localEnv:USERPROFILE},target=/WSL_USER,type=bind,consistency=cached",
+    "source=${localEnv:HOME}/.claude,target=/home/vscode/.claude,type=bind,consistency=cached"
+  ]
+}

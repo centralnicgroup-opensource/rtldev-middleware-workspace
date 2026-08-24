@@ -1,0 +1,29 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+# 4 for PHP/Perl-leaning repositories, 2 for JS/TS/Go. Set it once, here, to
+# whatever this repository's primary language uses — the per-type overrides below
+# then only cover the exceptions.
+indent_style = space
+indent_size = 2
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+# Trailing whitespace is significant in Markdown (a hard line break), so trimming
+# it silently changes rendered output.
+[*.md]
+trim_trailing_whitespace = false
+
+[*.{json,jsonc,yml,yaml}]
+indent_size = 2
+
+[*.php]
+indent_size = 4
+
+[*.sh]
+indent_size = 4
+
+[Makefile]
+indent_style = tab
