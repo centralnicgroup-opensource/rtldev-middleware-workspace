@@ -97,20 +97,41 @@ discover() {
 # --- layer resolution --------------------------------------------------------
 # Concatenation, not merging. The engine sources the result, so precedence is just the
 # order the files appear in — no rules to remember and no way to half-override a value.
+#
+# The profile column may name more than one profile, comma-separated, for traits that
+# cut across the audience split — "this repository's release pushes commits to its
+# default branch" is true of both customer-facing and internal repositories, and stating
+# it once beats repeating the same override in ten files. Profiles are applied left to
+# right, so the rightmost wins where two of them set the same value.
 resolve_config() {
-  local name="$1" profile="$2" out="$3"
+  local name="$1" profiles="$2" out="$3" p
+  local -a plist
+  IFS=',' read -r -a plist <<<"$profiles"
   {
-    printf '# resolved for %s (profile: %s) — generated, do not edit\n' "$name" "$profile"
+    printf '# resolved for %s (profiles: %s) — generated, do not edit\n' "$name" "$profiles"
     cat "$SETTINGS_DIR/_baseline.conf"
-    if [ -f "$SETTINGS_DIR/_profile-${profile}.conf" ]; then
-      printf '\n# --- profile: %s ---\n' "$profile"
-      cat "$SETTINGS_DIR/_profile-${profile}.conf"
-    fi
+    for p in "${plist[@]}"; do
+      printf '\n# --- profile: %s ---\n' "$p"
+      cat "$SETTINGS_DIR/_profile-${p}.conf"
+    done
     if [ -f "$SETTINGS_DIR/${name}.conf" ]; then
       printf '\n# --- repository override ---\n'
       cat "$SETTINGS_DIR/${name}.conf"
     fi
   } >"$out"
+}
+
+# A profile named in the register with no file behind it is fatal, not skipped. A typo
+# that silently drops a layer would apply the baseline as if the exception had been
+# declared — the settings equivalent of narrowing a bulk operation to all but one repo.
+check_profiles() {
+  local name="$1" profiles="$2" p
+  local -a plist
+  IFS=',' read -r -a plist <<<"$profiles"
+  for p in "${plist[@]}"; do
+    [ -f "$SETTINGS_DIR/_profile-${p}.conf" ] ||
+      ws_die "$name names profile '$p', but $SETTINGS_DIR/_profile-${p}.conf does not exist"
+  done
 }
 
 # --- --resolve ---------------------------------------------------------------
@@ -119,6 +140,11 @@ if [ "$RESOLVE_ONLY" -eq 1 ]; then
   [ "${#SELECTED[@]}" -gt 0 ] || ws_die "--resolve needs a repository name"
   for name in "${SELECTED[@]}"; do
     profile="$(register_profile "$name")" || ws_die "not in the register: $name"
+    if [ "$profile" = "exclude" ]; then
+      ws_info "$name is excluded by the register — no configuration is resolved for it"
+      continue
+    fi
+    check_profiles "$name" "$profile"
     resolve_config "$name" "$profile" /dev/stdout
   done
   exit 0
@@ -181,6 +207,7 @@ for name in "${TARGETS[@]}"; do
     continue
   fi
 
+  check_profiles "$name" "$profile"
   conf="$TMPDIR_RESOLVED/${name}.conf"
   resolve_config "$name" "$profile" "$conf"
 
