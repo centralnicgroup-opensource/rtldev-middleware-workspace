@@ -18,10 +18,6 @@
 	path = repos/rtldev-middleware-go-sdk
 	url = https://github.com/centralnicgroup-opensource/rtldev-middleware-go-sdk.git
 	branch = master
-[submodule "repos/rtldev-middleware-gulp-release-notification-plugin"]
-	path = repos/rtldev-middleware-gulp-release-notification-plugin
-	url = https://github.com/centralnicgroup-opensource/rtldev-middleware-gulp-release-notification-plugin.git
-	branch = main
 [submodule "repos/rtldev-middleware-idna-uts46"]
 	path = repos/rtldev-middleware-idna-uts46
 	url = https://github.com/centralnicgroup-opensource/rtldev-middleware-idna-uts46.git
@@ -46,18 +42,10 @@
 	path = repos/rtldev-middleware-python-sdk
 	url = https://github.com/centralnicgroup-opensource/rtldev-middleware-python-sdk.git
 	branch = master
-[submodule "repos/rtldev-middleware-semantic-release-notes-override"]
-	path = repos/rtldev-middleware-semantic-release-notes-override
-	url = https://github.com/centralnicgroup-opensource/rtldev-middleware-semantic-release-notes-override.git
-	branch = main
 [submodule "repos/rtldev-middleware-semantic-release-plugins"]
 	path = repos/rtldev-middleware-semantic-release-plugins
 	url = https://github.com/centralnicgroup-opensource/rtldev-middleware-semantic-release-plugins.git
 	branch = main
-[submodule "repos/rtldev-middleware-semantic-release-whmcs"]
-	path = repos/rtldev-middleware-semantic-release-whmcs
-	url = https://github.com/centralnicgroup-opensource/rtldev-middleware-semantic-release-whmcs.git
-	branch = master
 [submodule "repos/rtldev-middleware-shareable-workflows"]
 	path = repos/rtldev-middleware-shareable-workflows
 	url = https://github.com/centralnicgroup-opensource/rtldev-middleware-shareable-workflows.git
