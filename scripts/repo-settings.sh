@@ -11,8 +11,19 @@
 # merged change to this file. Run it by hand or via workflow_dispatch.
 #
 # Settings the API cannot express stay manual; see TEMPLATE-SETUP.md section 8.
+#
+# DESCRIPTION, HOMEPAGE and TOPICS accept the value @unmanaged, meaning "hold no opinion,
+# leave whatever GitHub has". That is not the same as an empty value, which is a request
+# to blank the field. Nothing else accepts it: every other setting is a policy with one
+# right answer, so opting out of one silently is exactly what must not be possible.
+#
+# Exit status: 0 clean, 1 drift, 2 could not run. Drift and failure have to be
+# distinguishable, or a caller reconciling many repositories reads "cannot reach the
+# API" as "settings are wrong" and vice versa.
 
 set -euo pipefail
+
+UNMANAGED="@unmanaged"
 
 MODE=check
 CONFIG=".github/repo-settings.conf"
@@ -28,8 +39,12 @@ info() { printf '  %s\n' "$*"; }
 head2() { printf '\n%s\n' "$*"; }
 die() {
     printf 'error: %s\n' "$*" >&2
-    exit 1
+    exit 2
 }
+
+# A field this configuration deliberately does not own. Reported so the output still
+# accounts for every setting, but counted as neither drift nor a read failure.
+unmanaged() { info "- ${1}: unmanaged here"; }
 
 # Reports one field. In check mode it records drift; in apply mode the caller has
 # already written the value, so this is just the log line.
@@ -104,7 +119,11 @@ fi
 # shellcheck source=/dev/null
 . "$CONFIG"
 
-: "${DESCRIPTION:=}" "${HOMEPAGE:=}" "${TOPICS:=}" "${IS_TEMPLATE:=false}"
+# The identity fields default to @unmanaged, not to "". A configuration that never
+# mentions DESCRIPTION is one that has no opinion about it; reading that silence as
+# "set it to the empty string" would erase the field on the next apply.
+: "${DESCRIPTION:=$UNMANAGED}" "${HOMEPAGE:=$UNMANAGED}" "${TOPICS:=$UNMANAGED}"
+: "${IS_TEMPLATE:=false}"
 : "${ALLOW_SQUASH_MERGE:=false}" "${ALLOW_REBASE_MERGE:=true}" "${ALLOW_MERGE_COMMIT:=false}"
 : "${ALLOW_AUTO_MERGE:=true}" "${DELETE_BRANCH_ON_MERGE:=true}"
 : "${HAS_ISSUES:=true}" "${HAS_PROJECTS:=false}" "${HAS_WIKI:=false}" "${HAS_DISCUSSIONS:=false}"
@@ -114,15 +133,20 @@ fi
 : "${RULESET_ENABLED:=false}" "${RULESET_NAME:=default-branch-protection}"
 : "${REQUIRED_APPROVALS:=1}" "${DISMISS_STALE_REVIEWS:=true}"
 : "${REQUIRE_LAST_PUSH_APPROVAL:=true}" "${REQUIRE_LINEAR_HISTORY:=true}"
+: "${REQUIRE_SIGNED_COMMITS:=false}"
 : "${REQUIRED_CHECKS:=}" "${EXPECTED_SECRETS:=}" "${EXPECTED_VARIABLES:=}"
 
 for name in IS_TEMPLATE ALLOW_SQUASH_MERGE ALLOW_REBASE_MERGE ALLOW_MERGE_COMMIT ALLOW_AUTO_MERGE \
     DELETE_BRANCH_ON_MERGE HAS_ISSUES HAS_PROJECTS HAS_WIKI HAS_DISCUSSIONS \
     PRIVATE_VULNERABILITY_REPORTING VULNERABILITY_ALERTS AUTOMATED_SECURITY_FIXES \
     SECRET_SCANNING SECRET_SCANNING_PUSH_PROTECTION RULESET_ENABLED \
-    DISMISS_STALE_REVIEWS REQUIRE_LAST_PUSH_APPROVAL REQUIRE_LINEAR_HISTORY; do
+    DISMISS_STALE_REVIEWS REQUIRE_LAST_PUSH_APPROVAL REQUIRE_LINEAR_HISTORY \
+    REQUIRE_SIGNED_COMMITS; do
     case "${!name}" in
         true | false) ;;
+        "$UNMANAGED")
+            die "${name} cannot be ${UNMANAGED} — only DESCRIPTION, HOMEPAGE and TOPICS may opt out"
+            ;;
         *) die "${name} must be true or false, got '${!name}'" ;;
     esac
 done
@@ -149,9 +173,18 @@ read_field() {
     printf '%s' "$v"
 }
 
+# Identity fields are added only when this configuration owns them. An @unmanaged field
+# is left out of the PATCH body entirely rather than sent as "", which GitHub would
+# faithfully apply — blanking twenty descriptions on the first org-wide run.
+identity=$(jq -n '{}')
+if [[ "$DESCRIPTION" != "$UNMANAGED" ]]; then
+    identity=$(jq --arg v "$DESCRIPTION" '.description = $v' <<<"$identity")
+fi
+if [[ "$HOMEPAGE" != "$UNMANAGED" ]]; then
+    identity=$(jq --arg v "$HOMEPAGE" '.homepage = $v' <<<"$identity")
+fi
+
 desired_core=$(jq -n \
-    --arg description "$DESCRIPTION" \
-    --arg homepage "$HOMEPAGE" \
     --argjson is_template "$IS_TEMPLATE" \
     --argjson has_issues "$HAS_ISSUES" \
     --argjson has_projects "$HAS_PROJECTS" \
@@ -164,11 +197,16 @@ desired_core=$(jq -n \
     --argjson delete_branch_on_merge "$DELETE_BRANCH_ON_MERGE" \
     '$ARGS.named')
 
+desired_core=$(jq -n --argjson a "$identity" --argjson b "$desired_core" '$a + $b')
+
 if [[ "$MODE" == "apply" ]]; then
     gh api --method PATCH "repos/${REPO}" --input - <<<"$desired_core" >/dev/null ||
         die "failed to patch core settings (admin required)"
     actual=$(gh api "repos/${REPO}")
 fi
+
+if [[ "$DESCRIPTION" == "$UNMANAGED" ]]; then unmanaged "description"; fi
+if [[ "$HOMEPAGE" == "$UNMANAGED" ]]; then unmanaged "homepage"; fi
 
 while IFS=$'\t' read -r key want; do
     compare "$key" "$want" "$(read_field "$key")"
@@ -178,14 +216,18 @@ done < <(jq -r 'to_entries[] | "\(.key)\t\(.value | tostring)"' <<<"$desired_cor
 
 head2 "Topics"
 
-want_topics=$(tr ' ' '\n' <<<"$TOPICS" | grep -v '^$' | sort | tr '\n' ' ' | sed 's/ $//')
-if [[ "$MODE" == "apply" ]]; then
-    jq -n --arg t "$TOPICS" '{names: ($t | split(" ") | map(select(length > 0)))}' |
-        gh api --method PUT "repos/${REPO}/topics" --input - >/dev/null ||
-        die "failed to set topics"
+if [[ "$TOPICS" == "$UNMANAGED" ]]; then
+    unmanaged "topics"
+else
+    want_topics=$(tr ' ' '\n' <<<"$TOPICS" | grep -v '^$' | sort | tr '\n' ' ' | sed 's/ $//')
+    if [[ "$MODE" == "apply" ]]; then
+        jq -n --arg t "$TOPICS" '{names: ($t | split(" ") | map(select(length > 0)))}' |
+            gh api --method PUT "repos/${REPO}/topics" --input - >/dev/null ||
+            die "failed to set topics"
+    fi
+    got_topics=$(gh api "repos/${REPO}/topics" --jq '.names | sort | join(" ")' 2>/dev/null || echo unknown)
+    compare "topics" "$want_topics" "$got_topics"
 fi
-got_topics=$(gh api "repos/${REPO}/topics" --jq '.names | sort | join(" ")' 2>/dev/null || echo unknown)
-compare "topics" "$want_topics" "$got_topics"
 
 # --- security ----------------------------------------------------------------
 
@@ -263,6 +305,7 @@ else
         --argjson dismiss "$DISMISS_STALE_REVIEWS" \
         --argjson last_push "$REQUIRE_LAST_PUSH_APPROVAL" \
         --argjson linear "$REQUIRE_LINEAR_HISTORY" \
+        --argjson signed "$REQUIRE_SIGNED_COMMITS" \
         --arg checks "$REQUIRED_CHECKS" \
         '{
       name: $name,
@@ -282,6 +325,7 @@ else
           } }
         ]
         + (if $linear then [{ type: "required_linear_history" }] else [] end)
+        + (if $signed then [{ type: "required_signatures" }] else [] end)
         + (if ($checks | length) > 0 then [{
             type: "required_status_checks",
             parameters: {
@@ -309,6 +353,27 @@ else
     else
         compare "ruleset '${RULESET_NAME}'" "present" \
             "$([[ -n "$existing" ]] && echo present || echo absent)"
+    fi
+
+    if [[ -z "$REQUIRED_CHECKS" ]]; then
+        info "  note: REQUIRED_CHECKS is empty — pull requests and linear history are"
+        info "        enforced, but nothing gates on CI, and 'branches must be up to"
+        info "        date' has no effect without at least one required check."
+    fi
+
+    # Classic branch protection and rulesets do not replace one another: both apply, and
+    # the union of their restrictions is enforced. A migration that creates the ruleset
+    # and leaves the classic rule in place therefore looks finished while the old rule is
+    # still the thing doing the work — and still the thing to edit when it blocks someone.
+    # Reported rather than deleted: removing branch protection is not something a drift
+    # reconciler should decide to do on its own.
+    default_branch=$(jq -r '.default_branch // empty' <<<"$actual")
+    if [[ -n "$default_branch" ]] &&
+        gh api "repos/${REPO}/branches/${default_branch}/protection" >/dev/null 2>&1; then
+        info "! classic branch protection is ALSO present on '${default_branch}'"
+        info "  both rule sets apply at once; remove the classic rule to finish the migration:"
+        info "  gh api --method DELETE repos/${REPO}/branches/${default_branch}/protection"
+        DRIFT=$((DRIFT + 1))
     fi
 fi
 

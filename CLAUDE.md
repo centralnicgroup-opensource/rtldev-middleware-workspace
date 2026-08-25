@@ -16,6 +16,11 @@ tooling and pinned commits, never product source.
   against.** Nothing walks `repos/` to decide what exists. A directory that is present
   but unregistered, or registered but empty, is a state the tooling reports — never one
   it silently adopts.
+- **There are two registers, and they answer different questions.** `.gitmodules` lists
+  what is checked out for bulk _code_ edits — public, non-archived, excluding this
+  repository. `.github/repo-settings/_register.tsv` lists what this workspace manages the
+  _GitHub settings_ of, which must cover the internal, the private, the archived and this
+  repository too. Neither is derivable from the other; do not try to merge them.
 - **Submodule directories keep the full repository name** (`repos/rtldev-middleware-php-sdk`).
   Opening one as its own devcontainer resolves `${localWorkspaceFolderBasename}` to the
   directory name, so a shortened directory would give that container a different name
@@ -51,9 +56,18 @@ change that loses someone's work at eighteen times the usual scale.
 - `push` refuses the tracked branch; `commit` refuses a message that is not Conventional
   Commits with a scope.
 - Only `push`, `pr` and `add --apply` write anything. `status`, `sync`, `pull`, `grep`,
-  `foreach` and `add` must stay safe to run at any time.
+  `foreach` and `add` must stay safe to run at any time. `org-settings.sh` writes only
+  with `--apply`.
 - Discovery that returns nothing is an error, not "zero repositories" — an API blip must
   never be read as "everything was deleted".
+- **A settings field with no opinion is `@unmanaged`, never `""`.** An empty value is a
+  request to blank the field, and an org-wide apply would blank it everywhere at once.
+  Only `DESCRIPTION`, `HOMEPAGE` and `TOPICS` may opt out; every other setting is a
+  policy with one right answer, so opting out of one silently must stay impossible.
+- **The settings drift job enumerates from GitHub, not from the register.** A repository
+  present in the organisation and absent from `_register.tsv` fails the run. A register
+  that is internally consistent but incomplete is the failure the central model exists to
+  prevent.
 
 ## Testing
 

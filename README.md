@@ -128,10 +128,41 @@ download of repositories the session may never touch.
 | ----------------------------------- | -------------------------------------------------------------------- |
 | `scripts/ws.sh`                     | The workspace CLI — every bulk operation                             |
 | `scripts/repos.sh`                  | Shared library: naming, the register, GitHub discovery               |
-| `scripts/repo-settings.sh`          | Reconciles _this_ repository's GitHub settings, as everywhere else   |
+| `scripts/org-settings.sh`           | Reconciles GitHub settings for _every_ `rtldev-middleware-*` repo    |
+| `scripts/repo-settings.sh`          | The single-repository settings engine `org-settings.sh` drives       |
+| `.github/repo-settings/`            | The settings themselves: baseline, profiles, per-repo overrides      |
 | `repos/`                            | The submodule checkouts. Nothing in here is edited from here         |
 | `.github/workflows/quality.yml`     | Prettier, actionlint, shellcheck, and the register consistency check |
 | `.github/workflows/repos-drift.yml` | Weekly: has a new repository appeared that is not registered?        |
+
+### Repository settings
+
+GitHub settings are managed here for the whole organisation, not repository by
+repository. `.github/repo-settings/` holds one baseline, two audience profiles
+(`customer-facing` — issues on; `internal` — issues off) and a per-repository override
+file where a repository genuinely differs. `_register.tsv` lists which repository takes
+which profile.
+
+```sh
+pnpm repo:settings                  # report drift everywhere, change nothing
+pnpm repo:settings:resolve php-sdk  # show the effective config for one repository
+pnpm repo:settings:apply            # make GitHub match (needs an org-wide token)
+```
+
+The three layers are concatenated and sourced as shell, so precedence is simply the
+order they appear in — there is no merge algorithm to reason about.
+
+Two properties are worth knowing. `DESCRIPTION`, `HOMEPAGE` and `TOPICS` accept
+`@unmanaged`, which means "hold no opinion" and is **not** the same as an empty value —
+an empty value is a request to blank the field, which on an org-wide apply would erase
+every description at once. And the drift job enumerates from the GitHub API rather than
+from the register, so a repository that exists in the organisation but is absent from
+`_register.tsv` is a **failure**, not a silence. That is the whole reason this is
+central: a per-repository drift job cannot report a repository that never received the
+job.
+
+Archived repositories stay listed with their profile and are skipped at run time —
+GitHub rejects settings writes on them, so archiving one needs no edit here.
 
 CI never checks out the submodules. Their code is gated by their own CI; re-linting it
 here would duplicate that and fail on findings this repository cannot fix. For the same
