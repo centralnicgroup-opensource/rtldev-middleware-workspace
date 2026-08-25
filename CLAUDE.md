@@ -48,7 +48,7 @@ tooling and pinned commits, never product source.
 ## Rules the tooling must keep
 
 These are the properties that make bulk operations safe. A change that weakens one is a
-change that loses someone's work at eighteen times the usual scale.
+change that loses someone's work at the scale of every repository at once.
 
 - A dirty or diverged repository is **skipped with a reason**, never forced, never
   stashed.
@@ -131,7 +131,7 @@ disabled on this repository).
 ## Tool-Output Hygiene
 
 Every tool result is spent context, and this repository makes it easy to spend a great
-deal of it at once: an unbounded search here reads eighteen codebases. A `PreToolUse`
+deal of it at once: an unbounded search here reads every registered codebase. A `PreToolUse`
 hook (`.claude/hooks/tool-output-hygiene.sh`) denies the worst shapes and names the
 replacement — take the replacement rather than working around it.
 
@@ -140,9 +140,9 @@ replacement — take the replacement rather than working around it.
 - **Reading part of a file:** **Read** with `offset`/`limit`, never `sed -n '<from>,<to>p'`
   or a bare `cat`.
 - **Status across repositories:** `./scripts/ws.sh status`, not `foreach 'git status'` —
-  one table instead of eighteen screens.
-- **`foreach` output is multiplied by eighteen.** Bound the command itself
-  (`git log -1 --oneline`, `| head -5`), not the result.
+  one table instead of one screen per repository.
+- **`foreach` output is multiplied by the number of registered repositories.** Bound the
+  command itself (`git log -1 --oneline`, `| head -5`), not the result.
 
 ## Model Routing
 
@@ -152,9 +152,9 @@ work down. Definitions live in `.claude/agents/`.
 - **Implementation** of an already-settled change goes to the `implementer` subagent.
 - **Review** goes to the `reviewer` subagent (Opus) or stays in the main thread. Never
   route a review to Sonnet.
-- **Fan-out reads across repositories** go to `Explore` or `general-purpose`, so
-  eighteen repositories' worth of file content lands in the subagent's context instead
-  of this one. A subagent reports conclusions, not file contents.
+- **Fan-out reads across repositories** go to `Explore` or `general-purpose`, so every
+  repository's worth of file content lands in the subagent's context instead of this
+  one. A subagent reports conclusions, not file contents.
 
 ## Do NOT
 

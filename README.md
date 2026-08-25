@@ -4,9 +4,9 @@ One checkout, every RTLDEV middleware repository — for the changes that are th
 in all of them.
 
 A dependency bump, a workflow rename, a licence header, a devcontainer Feature version:
-each is a small edit, and each has to land in eighteen repositories with eighteen
-branches, eighteen commits and eighteen pull requests. This repository turns that into
-one command, and turns "what is the state of all of them" into one table.
+each is a small edit, and each has to land in every registered repository, with its own
+branch, its own commit and its own pull request. This repository turns that into one
+command, and turns "what is the state of all of them" into one table.
 
 It holds no source of its own. Every repository is a git submodule under `repos/`, so
 the code always belongs to the repository that owns it — this workspace only ever
@@ -68,10 +68,10 @@ Every step is skippable per repository and none of them force anything:
 - A repository with uncommitted changes is **skipped**, never stashed — a bulk stash is
   a pile of unlabelled stashes nobody goes back for.
 - `pull` is `--ff-only`, always. A bulk pull that can merge is a bulk pull that can
-  produce eighteen conflicted worktrees from one keystroke.
+  leave a conflicted worktree in every repository at once, from one keystroke.
 - `push` refuses to push the tracked branch, and `commit` refuses a message that is not
-  Conventional Commits with a scope — a malformed bulk message lands in eighteen
-  histories at once, and semantic-release reads those messages to pick versions.
+  Conventional Commits with a scope — a malformed bulk message lands in every history at
+  once, and semantic-release reads those messages to pick versions.
 - Failures are collected and named at the end, so a partially applied operation always
   tells you which repositories to look at.
 
@@ -88,8 +88,9 @@ Node repository:
 ./scripts/ws.sh foreach -j 'gh run list --limit 1'     # -j: parallel, output grouped
 ```
 
-`-j` uses GNU `parallel --group` rather than `xargs -P` deliberately: eighteen commands
-writing to one terminal concurrently produces interleaved output nobody can read.
+`-j` uses GNU `parallel --group` rather than `xargs -P` deliberately: a dozen or more
+commands writing to one terminal concurrently produces interleaved output nobody can
+read.
 
 ## Why the checkouts are blobless
 

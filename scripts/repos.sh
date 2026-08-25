@@ -83,7 +83,7 @@ ws_is_populated() {
 # "do this everywhere" is the reason the workspace exists.
 #
 # Unknown names are fatal rather than skipped: a typo that silently narrows a bulk
-# operation to 17 of 18 repositories is worse than one that stops.
+# operation to all but one of the registered repositories is worse than one that stops.
 ws_select() {
   if [ "$#" -eq 0 ]; then
     ws_registered

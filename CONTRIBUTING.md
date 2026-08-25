@@ -47,7 +47,7 @@ two have to stay in step — the `register` job in CI fails when they do not.
 
 ## Changing the bulk tooling
 
-`scripts/ws.sh` runs unattended over eighteen repositories, so the safety properties
+`scripts/ws.sh` runs unattended over every registered repository, so the safety properties
 listed under "Rules the tooling must keep" in [CLAUDE.md](CLAUDE.md) are not style
 preferences. In particular: skip rather than force, `--ff-only` rather than merge, and
 report every per-repository failure by name. Test a change against the smallest

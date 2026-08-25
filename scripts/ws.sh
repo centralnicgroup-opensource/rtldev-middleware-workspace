@@ -2,9 +2,9 @@
 #
 # ws — one operation, every repository.
 #
-# The workspace exists so that a change which touches eighteen repositories is one
-# command instead of eighteen, and so that the state of all eighteen is one table
-# instead of eighteen `git status` runs. Everything here is a thin, auditable wrapper
+# The workspace exists so that a change which touches every repository is one command
+# instead of one per repository, and so that the state of all of them is one table
+# instead of a `git status` run each. Everything here is a thin, auditable wrapper
 # over git and gh: nothing is cached, no state is kept outside the submodules
 # themselves, and every subcommand prints the repositories it acted on.
 #
@@ -151,8 +151,8 @@ cmd_sync() {
 # Moves each checkout to the current tip of its tracked branch — the "start of day"
 # command, and the one to run before `ws.sh branch`.
 #
-# --ff-only, always. A bulk pull that can merge is a bulk pull that can produce
-# eighteen merge commits, or eighteen conflicted worktrees, from one keystroke.
+# --ff-only, always. A bulk pull that can merge is a bulk pull that can leave a merge
+# commit, or a conflicted worktree, in every repository at once, from one keystroke.
 cmd_pull() {
   local full short dir branch
   while IFS= read -r full; do
@@ -187,8 +187,8 @@ cmd_pull() {
 # $WS_REPO_DIR exported, so it can branch on which repository it is in — which is what
 # makes a single invocation usable across a PHP, a Go and a Node repository.
 #
-# Output is grouped per repository, never interleaved: eighteen commands writing to the
-# same terminal concurrently produces something nobody can read, so GNU parallel's
+# Output is grouped per repository, never interleaved: a dozen or more commands writing
+# to the same terminal concurrently produces something nobody can read, so GNU parallel's
 # --group is used when available and a plain sequential loop otherwise.
 cmd_foreach() {
   local parallel_mode=0
@@ -319,7 +319,7 @@ cmd_commit() {
 
   # Conventional Commits with a mandatory scope is the org rule, and semantic-release
   # reads these messages to pick the next version — a malformed bulk message would land
-  # in eighteen histories at once. Checked, not assumed.
+  # in every history at once. Checked, not assumed.
   if ! printf '%s' "$message" | grep -qE '^(feat|fix|ci|build|chore|docs|test|refactor|perf|style|revert)\([a-z0-9._-]+\)!?: .+'; then
     ws_die "message must be Conventional Commits with a scope: '<type>(<scope>): <summary>'"
   fi
