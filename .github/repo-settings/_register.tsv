@@ -7,6 +7,14 @@
 #   internal          department tooling — issues off
 #   exclude           deliberately not managed here; the note says why
 #
+# and may be followed, comma-separated, by any number of trait profiles that cut across
+# that split. Applied left to right, so the rightmost wins on a conflict:
+#   releases-to-branch  @semantic-release/git pushes release commits to the default
+#                       branch, so branch protection waits for a bypass actor
+#
+# A profile named here with no _profile-<name>.conf behind it is a fatal error, not a
+# skipped layer — a typo must not apply the baseline as if an exception were declared.
+#
 # This is a second register alongside .gitmodules, not a duplicate of it. .gitmodules
 # records what is checked out as a submodule for bulk *code* edits: it excludes the
 # workspace itself, and excludes archived and non-public repositories. Settings
@@ -19,26 +27,26 @@
 # GitHub rejects settings writes on them; archiving one needs no edit here.
 
 # --- Customer-facing ---------------------------------------------------------
-rtldev-middleware-php-sdk	customer-facing
-rtldev-middleware-node-sdk	customer-facing
-rtldev-middleware-java-sdk	customer-facing
-rtldev-middleware-python-sdk	customer-facing
-rtldev-middleware-go-sdk	customer-facing
+rtldev-middleware-php-sdk	customer-facing,releases-to-branch
+rtldev-middleware-node-sdk	customer-facing,releases-to-branch
+rtldev-middleware-java-sdk	customer-facing,releases-to-branch
+rtldev-middleware-python-sdk	customer-facing,releases-to-branch
+rtldev-middleware-go-sdk	customer-facing,releases-to-branch
 rtldev-middleware-perl-sdk	customer-facing	archived
 rtldev-middleware-whmcs	customer-facing
-rtldev-middleware-blesta	customer-facing
-rtldev-middleware-idna-uts46	customer-facing
-rtldev-middleware-php-idna-translator	customer-facing
+rtldev-middleware-blesta	customer-facing,releases-to-branch
+rtldev-middleware-idna-uts46	customer-facing,releases-to-branch
+rtldev-middleware-php-idna-translator	customer-facing,releases-to-branch
 
 # --- Internal ----------------------------------------------------------------
 rtldev-middleware-workspace	internal
 rtldev-middleware-template	internal
 rtldev-middleware-shareable-workflows	internal
-rtldev-middleware-devcontainer-features	internal
+rtldev-middleware-devcontainer-features	internal,releases-to-branch
 rtldev-middleware-domain-ideas	internal
 rtldev-middleware-gh-actions-endoflife	internal
 rtldev-middleware-dnscontrol-dnsconfig	internal	test/demo config for the dnscontrol provider module
-rtldev-middleware-semantic-release-plugins	internal
+rtldev-middleware-semantic-release-plugins	internal,releases-to-branch
 rtldev-middleware-semantic-release-whmcs	internal	archived
 rtldev-middleware-semantic-release-notes-override	internal	archived
 rtldev-middleware-gulp-release-notification-plugin	internal	archived
