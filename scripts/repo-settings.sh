@@ -131,6 +131,7 @@ fi
 : "${AUTOMATED_SECURITY_FIXES:=true}"
 : "${SECRET_SCANNING:=true}" "${SECRET_SCANNING_PUSH_PROTECTION:=true}"
 : "${RULESET_ENABLED:=false}" "${RULESET_NAME:=default-branch-protection}"
+: "${RULESET_BYPASS_ACTORS:=}"
 : "${REQUIRED_APPROVALS:=1}" "${DISMISS_STALE_REVIEWS:=true}"
 : "${REQUIRE_LAST_PUSH_APPROVAL:=true}" "${REQUIRE_LINEAR_HISTORY:=true}"
 : "${REQUIRE_SIGNED_COMMITS:=false}"
@@ -295,12 +296,59 @@ fi
 
 head2 "Branch protection"
 
+# RULESET_BYPASS_ACTORS is "<actor_type>:<actor_id>:<bypass_mode>", comma-separated for
+# more than one. actor_id is left empty for the actor types GitHub treats as a class
+# rather than as one actor — DeployKey is the one that matters here: the API requires
+# actor_id null, because the bypass is granted to "a deploy key of this repository", not
+# to one particular key.
+#
+# Parsed in bash rather than in jq so a malformed entry dies with the entry quoted. A
+# typo that silently produced no bypass would reject the very push the bypass exists to
+# allow; one that silently produced the wrong actor would hand the bypass to someone else.
+ruleset_bypass_json() {
+    local spec type id mode out='[]'
+    local -a specs
+    IFS=',' read -r -a specs <<<"$RULESET_BYPASS_ACTORS"
+    for spec in "${specs[@]}"; do
+        spec="${spec//[[:space:]]/}"
+        [[ -n "$spec" ]] || continue
+        IFS=':' read -r type id mode <<<"$spec"
+        [[ -n "$type" && -n "$mode" ]] ||
+            die "RULESET_BYPASS_ACTORS: '${spec}' is not <actor_type>:<actor_id>:<bypass_mode>"
+        case "$mode" in
+            always | pull_request) ;;
+            *) die "RULESET_BYPASS_ACTORS: '${spec}' has bypass_mode '${mode}', want always or pull_request" ;;
+        esac
+        [[ -z "$id" || "$id" =~ ^[0-9]+$ ]] ||
+            die "RULESET_BYPASS_ACTORS: '${spec}' has a non-numeric actor_id '${id}'"
+        out=$(jq --arg t "$type" --arg i "$id" --arg m "$mode" \
+            '. + [{
+                actor_type: $t,
+                actor_id: (if $i == "" then null else ($i | tonumber) end),
+                bypass_mode: $m
+             }]' <<<"$out")
+    done
+    printf '%s' "$out"
+}
+
+# One line per actor, sorted, so the wanted and the actual list compare as strings
+# regardless of the order GitHub returns them in.
+ruleset_bypass_label() {
+    jq -r '
+        if length == 0 then "none"
+        else map("\(.actor_type):\(.actor_id // ""):\(.bypass_mode)") | sort | join(" ")
+        end'
+}
+
 if [[ "$RULESET_ENABLED" != "true" ]]; then
     info "- repository ruleset disabled in config; expecting an organisation ruleset"
     info "  verify: gh api orgs/OWNER/rulesets"
 else
+    bypass_actors=$(ruleset_bypass_json)
+
     ruleset_body=$(jq -n \
         --arg name "$RULESET_NAME" \
+        --argjson bypass_actors "$bypass_actors" \
         --argjson approvals "$REQUIRED_APPROVALS" \
         --argjson dismiss "$DISMISS_STALE_REVIEWS" \
         --argjson last_push "$REQUIRE_LAST_PUSH_APPROVAL" \
@@ -311,6 +359,7 @@ else
       name: $name,
       target: "branch",
       enforcement: "active",
+      bypass_actors: $bypass_actors,
       conditions: { ref_name: { include: ["~DEFAULT_BRANCH"], exclude: [] } },
       rules: (
         [
@@ -350,9 +399,29 @@ else
                 info "= ruleset '${RULESET_NAME}' created" ||
                 info "! ruleset creation failed (admin required)"
         fi
+        info "= ruleset bypass actors: $(ruleset_bypass_label <<<"$bypass_actors")"
     else
         compare "ruleset '${RULESET_NAME}'" "present" \
             "$([[ -n "$existing" ]] && echo present || echo absent)"
+
+        # The bypass list is what decides whether the ruleset can be walked around, so it
+        # is compared rather than assumed: an actor added by hand in the web UI is drift
+        # of exactly the shape that makes every other rule here decorative.
+        #
+        # Fetched per ruleset because the list endpoint returns a summary — bypass_actors
+        # and rules appear only on GET /repos/{owner}/{repo}/rulesets/{id}.
+        if [[ -n "$existing" ]]; then
+            detail=$(gh api "repos/${REPO}/rulesets/${existing}" 2>/dev/null || echo "")
+            if [[ -n "$detail" ]]; then
+                compare "ruleset bypass actors" \
+                    "$(ruleset_bypass_label <<<"$bypass_actors")" \
+                    "$(jq '.bypass_actors // []' <<<"$detail" | ruleset_bypass_label)"
+            else
+                compare "ruleset bypass actors" "-" "unknown"
+            fi
+        else
+            info "- ruleset bypass actors: not comparable, the ruleset itself is absent"
+        fi
     fi
 
     if [[ -z "$REQUIRED_CHECKS" ]]; then
