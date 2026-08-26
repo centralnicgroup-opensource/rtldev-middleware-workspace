@@ -46,7 +46,7 @@ rtldev-middleware-devcontainer-features	internal,releases-to-branch
 rtldev-middleware-domain-ideas	internal
 rtldev-middleware-gh-actions-endoflife	internal
 rtldev-middleware-dnscontrol-dnsconfig	internal	test/demo config for the dnscontrol provider module
-rtldev-middleware-semantic-release-plugins	internal,releases-to-branch
+rtldev-middleware-semantic-release-plugins	internal
 rtldev-middleware-semantic-release-whmcs	internal	archived
 rtldev-middleware-semantic-release-notes-override	internal	archived
 rtldev-middleware-gulp-release-notification-plugin	internal	archived
