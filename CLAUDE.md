@@ -109,9 +109,18 @@ npx prettier@3 --check .
 
 ## Working inside `repos/`
 
-- Never commit inside a submodule from this repository's context without also deciding
-  what happens to the pin. Either `ws.sh pin` afterwards, or leave the pointer alone
-  deliberately.
+- **Always update the pin.** A submodule change is not finished until this repository
+  points at it: `ws.sh pin`, then `chore(repos): update pinned commits`. Leaving the
+  pointer behind is not the neutral option it looks like — a fresh clone of this
+  workspace still gets the old code, so the change effectively exists only for whoever
+  made it.
+- **Pin only what is already on the tracked branch**, never a local commit — see the
+  ordering rule under Git Conventions. That constraint outranks the one above: if the
+  submodule work is not merged yet, the pin waits, it does not get forced.
+- **A pin bump carries more than your own change.** Advancing a pin to the tracked-branch
+  tip also brings in every other commit that landed there since the last bump. That is
+  intended: a pin records the commit this workspace tracks, not the commit you wrote. Say
+  so in the PR when the span is wide.
 - Each submodule has its own `CLAUDE.md`, linters and conventions — read the one in the
   repository you are editing before changing its code. This file does not govern them.
 - Formatting a submodule's files uses **its** prettier config:
