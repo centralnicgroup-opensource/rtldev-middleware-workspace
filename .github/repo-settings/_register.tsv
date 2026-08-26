@@ -11,6 +11,11 @@
 # that split. Applied left to right, so the rightmost wins on a conflict:
 #   releases-to-branch  @semantic-release/git pushes release commits to the default
 #                       branch, so branch protection waits for a bypass actor
+#   releases-via-deploykey
+#                       the same push, moved to SSH with a per-repository deploy key
+#                       that the ruleset names as its only bypass actor — so branch
+#                       protection is on. Repositories move from releases-to-branch to
+#                       this one at a time; this column is the state of that migration.
 #
 # A profile named here with no _profile-<name>.conf behind it is a fatal error, not a
 # skipped layer — a typo must not apply the baseline as if an exception were declared.
@@ -27,7 +32,7 @@
 # GitHub rejects settings writes on them; archiving one needs no edit here.
 
 # --- Customer-facing ---------------------------------------------------------
-rtldev-middleware-php-sdk	customer-facing,releases-to-branch
+rtldev-middleware-php-sdk	customer-facing,releases-via-deploykey
 rtldev-middleware-node-sdk	customer-facing,releases-to-branch
 rtldev-middleware-java-sdk	customer-facing,releases-to-branch
 rtldev-middleware-python-sdk	customer-facing,releases-to-branch
