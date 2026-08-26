@@ -37,7 +37,7 @@
 [submodule "repos/rtldev-middleware-php-sdk"]
 	path = repos/rtldev-middleware-php-sdk
 	url = https://github.com/centralnicgroup-opensource/rtldev-middleware-php-sdk.git
-	branch = master
+	branch = main
 [submodule "repos/rtldev-middleware-python-sdk"]
 	path = repos/rtldev-middleware-python-sdk
 	url = https://github.com/centralnicgroup-opensource/rtldev-middleware-python-sdk.git
