@@ -9,13 +9,15 @@
 #
 # and may be followed, comma-separated, by any number of trait profiles that cut across
 # that split. Applied left to right, so the rightmost wins on a conflict:
-#   releases-to-branch  @semantic-release/git pushes release commits to the default
-#                       branch, so branch protection waits for a bypass actor
 #   releases-via-deploykey
-#                       the same push, moved to SSH with a per-repository deploy key
-#                       that the ruleset names as its only bypass actor — so branch
-#                       protection is on. Repositories move from releases-to-branch to
-#                       this one at a time; this column is the state of that migration.
+#                       @semantic-release/git pushes release commits straight to the
+#                       default branch, over SSH with a per-repository deploy key that
+#                       the ruleset names as its only bypass actor — so branch protection
+#                       is on rather than deferred. The trait this replaced,
+#                       releases-to-branch, withheld protection entirely while no bypass
+#                       existed. RSRMID-2994 moved the last repository across and deleted
+#                       the profile, so a register still naming it is now a fatal error
+#                       rather than a legacy spelling.
 #
 # A profile named here with no _profile-<name>.conf behind it is a fatal error, not a
 # skipped layer — a typo must not apply the baseline as if an exception were declared.
@@ -33,21 +35,21 @@
 
 # --- Customer-facing ---------------------------------------------------------
 rtldev-middleware-php-sdk	customer-facing,releases-via-deploykey
-rtldev-middleware-node-sdk	customer-facing,releases-to-branch
-rtldev-middleware-java-sdk	customer-facing,releases-to-branch
-rtldev-middleware-python-sdk	customer-facing,releases-to-branch
-rtldev-middleware-go-sdk	customer-facing,releases-to-branch
+rtldev-middleware-node-sdk	customer-facing,releases-via-deploykey
+rtldev-middleware-java-sdk	customer-facing,releases-via-deploykey
+rtldev-middleware-python-sdk	customer-facing,releases-via-deploykey
+rtldev-middleware-go-sdk	customer-facing,releases-via-deploykey
 rtldev-middleware-perl-sdk	customer-facing	archived
 rtldev-middleware-whmcs	customer-facing
-rtldev-middleware-blesta	customer-facing,releases-to-branch
-rtldev-middleware-idna-uts46	customer-facing,releases-to-branch
-rtldev-middleware-php-idna-translator	customer-facing,releases-to-branch
+rtldev-middleware-blesta	customer-facing,releases-via-deploykey
+rtldev-middleware-idna-uts46	customer-facing,releases-via-deploykey
+rtldev-middleware-php-idna-translator	customer-facing,releases-via-deploykey
 
 # --- Internal ----------------------------------------------------------------
 rtldev-middleware-workspace	internal
 rtldev-middleware-template	internal
 rtldev-middleware-shareable-workflows	internal
-rtldev-middleware-devcontainer-features	internal,releases-to-branch
+rtldev-middleware-devcontainer-features	internal,releases-via-deploykey
 rtldev-middleware-domain-ideas	internal
 rtldev-middleware-gh-actions-endoflife	internal
 rtldev-middleware-dnscontrol-dnsconfig	internal	test/demo config for the dnscontrol provider module
