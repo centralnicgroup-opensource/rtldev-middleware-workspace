@@ -6,9 +6,9 @@
       "integrity": "sha256:cfc2e7d3e9fd3b9b01f8d5cb158508a884c8c0ede2e23ed10f32dea5d4ffe69a"
     },
     "ghcr.io/centralnicgroup-opensource/rtldev-middleware-devcontainer-features/devbase:1": {
-      "version": "1.2.2",
-      "resolved": "ghcr.io/centralnicgroup-opensource/rtldev-middleware-devcontainer-features/devbase@sha256:dc666f045ab07c1899fc1484e58b0d8b574db1d1e6d7edd975a7a6dee4e67722",
-      "integrity": "sha256:dc666f045ab07c1899fc1484e58b0d8b574db1d1e6d7edd975a7a6dee4e67722",
+      "version": "1.7.0",
+      "resolved": "ghcr.io/centralnicgroup-opensource/rtldev-middleware-devcontainer-features/devbase@sha256:ad01dc166b9e15c08099ca2bbceb59ebdaf2a83eebf08e5ab0a1a1e656ffc35a",
+      "integrity": "sha256:ad01dc166b9e15c08099ca2bbceb59ebdaf2a83eebf08e5ab0a1a1e656ffc35a",
       "dependsOn": [
         "ghcr.io/devcontainers/features/node:2",
         "ghcr.io/anthropics/devcontainer-features/claude-code:1",
@@ -16,9 +16,9 @@
       ]
     },
     "ghcr.io/devcontainers/features/github-cli:1": {
-      "version": "1.1.0",
-      "resolved": "ghcr.io/devcontainers/features/github-cli@sha256:d22f50b70ed75339b4eed1ba9ecde3a1791f90e88d37936517e3bace0bbad671",
-      "integrity": "sha256:d22f50b70ed75339b4eed1ba9ecde3a1791f90e88d37936517e3bace0bbad671"
+      "version": "1.1.1",
+      "resolved": "ghcr.io/devcontainers/features/github-cli@sha256:94879eebb6a0e4e2f197de9f12db7427cb4a25b82d93c55239ce8c8fc394a1b4",
+      "integrity": "sha256:94879eebb6a0e4e2f197de9f12db7427cb4a25b82d93c55239ce8c8fc394a1b4"
     },
     "ghcr.io/devcontainers/features/node:2": {
       "version": "2.1.0",
