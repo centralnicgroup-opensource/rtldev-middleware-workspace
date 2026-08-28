@@ -132,6 +132,8 @@ download of repositories the session may never touch.
 | `scripts/org-settings.sh`           | Reconciles GitHub settings for _every_ `rtldev-middleware-*` repo    |
 | `scripts/repo-settings.sh`          | The single-repository settings engine `org-settings.sh` drives       |
 | `.github/repo-settings/`            | The settings themselves: baseline, profiles, per-repo overrides      |
+| `scripts/node-policy.sh`            | Reports repositories whose Node/npm/pnpm declaration has drifted     |
+| `.github/node-policy.conf`          | The one Node toolchain every repository is meant to declare          |
 | `repos/`                            | The submodule checkouts. Nothing in here is edited from here         |
 | `.github/workflows/quality.yml`     | Prettier, actionlint, shellcheck, and the register consistency check |
 | `.github/workflows/repos-drift.yml` | Weekly: has a new repository appeared that is not registered?        |
@@ -164,6 +166,53 @@ job.
 
 Archived repositories stay listed with their profile and are skipped at run time —
 GitHub rejects settings writes on them, so archiving one needs no edit here.
+
+### The Node toolchain policy
+
+We install with pnpm, and every repository is meant to say the same thing about which
+Node, which npm floor and which pnpm it expects. Nothing enforced that, and six different
+spellings of `engines.node` accumulated across the manifests without anyone noticing.
+`.github/node-policy.conf` holds the one canonical answer;
+[node-policy-drift.yml](.github/workflows/node-policy-drift.yml) reports weekly on
+anything that disagrees.
+
+```sh
+pnpm node:policy            # report drift everywhere
+pnpm node:policy --verbose  # and list the repositories that are clean
+```
+
+Three things about it are deliberate. Comparison is **literal string equality**, with no
+semver evaluation anywhere — "these two ranges mean the same thing" is exactly the
+judgement that let six spellings of one intent accumulate. `engines.npm` is **not** a
+claim that we install with npm: devbase reads that field and upgrades the container's npm
+to match it, and it only parses the `>=` spelling, so `^12.0.0` would silently disable the
+upgrade rather than fail. And no Node release bundles npm 12, so that floor cannot be
+folded into `engines.node` — it has to be stated.
+
+The pnpm pin lives in `devEngines.packageManager` as a **range**, and `packageManager`
+must be **absent**. The older field takes one exact version and pnpm 10+ acts on it
+silently — it downloads that version and re-executes itself as it — so every pnpm patch
+release becomes a commit in every manifest, and skipping that commit is invisible.
+It decayed exactly that way: `semantic-release-plugins` sat a whole major behind at
+`pnpm@10.24.0`. `devEngines` validates instead of switching, so a pnpm outside the range
+fails the command by name rather than quietly becoming a different pnpm. Carrying both
+fields would mean two sources of truth that disagree by design — `pnpm/action-setup`
+reads `devEngines` first, pnpm's own self-management reads only `packageManager` — so the
+policy treats the old field as drift.
+
+Declaring `devEngines` makes pnpm lock itself: the next install prepends a
+`packageManagerDependencies` document to `pnpm-lock.yaml` resolving pnpm to an exact
+version, and `pnpm i --frozen-lockfile` fails until that is committed. So a repository
+moving across commits the manifest edit and the regenerated lockfile together. That is the
+point rather than a side effect — the range states intent in the manifest, the exact
+version sits in the lockfile with every other exact version, and the dependency refresh
+job bumps it like anything else.
+
+Coverage needs no register, which is the one way this improves on the settings drift job
+above. It enumerates from the organisation and checks everything with a `package.json`, so
+a new repository is covered the moment it exists; one without a `package.json` is reported
+and counted rather than skipped in silence. The script is read-only and has no write mode
+— a manifest edit belongs in that repository's own history and review.
 
 CI never checks out the submodules. Their code is gated by their own CI; re-linting it
 here would duplicate that and fail on findings this repository cannot fix. For the same

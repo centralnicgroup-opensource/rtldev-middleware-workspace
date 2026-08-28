@@ -27,11 +27,28 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+
+      # No `version:` input, deliberately — the action then resolves the version from
+      # `devEngines.packageManager` in package.json, so CI runs a pnpm inside the range
+      # this repository declares rather than whatever pnpm released most recently.
+      # Passing a version here as well is a hard error: the action refuses two
+      # disagreeing declarations. (RSRMID-3008)
+      #
+      # It must come before setup-node, which needs pnpm on PATH to resolve `cache: pnpm`.
+      - uses: pnpm/action-setup@v6.0.9
       - uses: actions/setup-node@v6
         with:
           node-version: lts/*
+          cache: pnpm
+
+      # Installing rather than `npx --yes prettier@3` — that fetched whatever prettier 3
+      # happened to be newest, so CI could disagree with every developer's checkout over
+      # formatting nobody had changed. The lockfile pins one version for both. It also
+      # takes npm off the CI path entirely, which is the point: we install with pnpm.
+      - name: Install
+        run: pnpm install --frozen-lockfile
       - name: Check formatting
-        run: npx --yes prettier@3 --check .
+        run: pnpm prettier
 
   actionlint:
     name: Actionlint
