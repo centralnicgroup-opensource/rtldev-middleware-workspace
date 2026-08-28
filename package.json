@@ -29,8 +29,15 @@
     "middleware"
   ],
   "engines": {
-    "node": ">=24.15.0",
+    "node": "^24.15.0 || ^26.0.0",
     "npm": ">=12.0.0"
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "^11.0.0",
+      "onFail": "error"
+    }
   },
   "scripts": {
     "prepare": "husky",
@@ -39,6 +46,7 @@
     "repo:settings": "bash scripts/org-settings.sh",
     "repo:settings:apply": "bash scripts/org-settings.sh --apply",
     "repo:settings:resolve": "bash scripts/org-settings.sh --resolve",
+    "node:policy": "bash scripts/node-policy.sh",
     "ws": "bash scripts/ws.sh",
     "ws:status": "bash scripts/ws.sh status",
     "ws:sync": "bash scripts/ws.sh sync",

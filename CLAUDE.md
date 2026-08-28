@@ -57,7 +57,8 @@ change that loses someone's work at the scale of every repository at once.
   Commits with a scope.
 - Only `push`, `pr` and `add --apply` write anything. `status`, `sync`, `pull`, `grep`,
   `foreach` and `add` must stay safe to run at any time. `org-settings.sh` writes only
-  with `--apply`.
+  with `--apply`, and `node-policy.sh` has no write mode at all — a manifest edit belongs
+  in that repository's own history and review, never in a bulk apply from here.
 - Discovery that returns nothing is an error, not "zero repositories" — an API blip must
   never be read as "everything was deleted".
 - **A settings field with no opinion is `@unmanaged`, never `""`.** An empty value is a
@@ -77,8 +78,13 @@ There is no test framework here. Verify changes by running the command:
 shellcheck --severity=warning scripts/*.sh .devcontainer/*.sh
 ./scripts/ws.sh status                     # cheap, read-only, exercises the register
 ./scripts/ws.sh sync devcontainer-features # smallest repository, ~200 KB
-npx prettier@3 --check .
+./scripts/node-policy.sh                   # read-only, needs an org-wide token
+pnpm prettier
 ```
+
+Never `npx` anything here — we install with pnpm, and `npx` reaches for npm's registry
+client. `pnpm prettier` runs the version the lockfile pins; `pnpm dlx` is the equivalent
+of `npx` for a package that is genuinely not a dependency.
 
 ## Build, CI & Policies
 
@@ -88,6 +94,14 @@ npx prettier@3 --check .
 - `repos-drift.yml` runs weekly and **fails** when a `rtldev-middleware-*` repository
   exists on GitHub but is not registered here — the failure mode where every subsequent
   bulk operation silently covers one repository fewer.
+- `node-policy-drift.yml` runs weekly and **fails** when a repository's `engines`,
+  `devEngines.packageManager` or committed lockfile disagrees with
+  `.github/node-policy.conf`, or that still carries a `packageManager` field.
+  Comparison is literal string equality, never semver evaluation — deciding that two
+  ranges "mean the same thing" is what let six spellings of `engines.node` accumulate.
+  It needs no register: it enumerates from GitHub and checks everything with a
+  `package.json`. It has **no trigger on `pull_request`**, deliberately — the job fails
+  on drift that only a commit in _another_ repository can fix.
 - **Devcontainer:** the frame is in `.devcontainer/`; shared behaviour comes from the
   `devbase` Feature by version. Never fork its scripts here. No language runtimes are
   installed — that is a decision, not an omission (see README).

@@ -1,0 +1,57 @@
+---
+# Reports when any rtldev-middleware-* repository's Node toolchain declaration no longer
+# matches .github/node-policy.conf — engines.node, engines.npm, packageManager and which
+# lockfile is committed.
+#
+# We install with pnpm, and every repository is meant to say the same thing about which
+# Node, which npm floor and which pnpm it expects. Nothing enforced that, and six
+# different spellings of engines.node accumulated without anyone noticing. Left alone it
+# stays invisible until a release runs on a toolchain nobody chose — which is precisely
+# the kind of failure a weekly job is cheap insurance against. (RSRMID-3008)
+#
+# Unlike the settings drift job, this one needs no register to be complete: it
+# enumerates from the organisation and checks every repository that has a package.json,
+# so a new repository is covered the moment it exists. A repository with no package.json
+# is reported and counted rather than skipped in silence.
+#
+# Read-only by construction — scripts/node-policy.sh has no write mode at all. Bringing
+# a repository into line is a commit in that repository, where the change gets the
+# review it deserves.
+name: Node policy drift
+
+on:
+  schedule:
+    # Monday morning, staggered behind the settings (06:00) and register (06:30) jobs so
+    # three failures do not arrive as one indistinguishable batch.
+    - cron: "0 7 * * 1"
+  workflow_dispatch:
+
+# No pull_request trigger, matching the two sibling drift jobs. It is tempting — a change
+# to the policy or the check ought to be tested against the real organisation — but the
+# job fails whenever any repository has drifted, and the repositories are brought into
+# line by commits in *their* history, not this one. A PR trigger would therefore make
+# every pull request here red for reasons the pull request cannot fix. Run it by hand
+# (`workflow_dispatch`, or `scripts/node-policy.sh` locally) when changing the policy.
+
+permissions:
+  contents: read
+
+jobs:
+  drift:
+    name: Node policy drift
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      # GITHUB_TOKEN is scoped to THIS repository, so it cannot read another
+      # repository's package.json at all — every check would report "could not read the
+      # repository root" and the job would be uniformly, meaninglessly red.
+      # RTLDEV_MW_CI_TOKEN reads across the organisation, which is all this job needs;
+      # it never writes anywhere.
+      #
+      # The fallback to GITHUB_TOKEN is deliberate and safe: without the secret the run
+      # fails loudly on unreadable repositories rather than passing on an empty set.
+      - name: Check every repository against .github/node-policy.conf
+        env:
+          GH_TOKEN: ${{ secrets.RTLDEV_MW_CI_TOKEN || secrets.GITHUB_TOKEN }}
+        run: scripts/node-policy.sh --verbose
