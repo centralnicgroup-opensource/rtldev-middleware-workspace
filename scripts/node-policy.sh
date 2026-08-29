@@ -3,6 +3,11 @@
 # Report every rtldev-middleware-* repository whose Node toolchain declaration does not
 # match .github/node-policy.conf.
 #
+# "Toolchain declaration" is package.json — engines, devEngines.packageManager, the
+# lockfile — plus the pnpm settings in pnpm-workspace.yaml. The second file is not an
+# afterthought: minimumReleaseAge lives there, and it is the one setting here that is a
+# supply-chain control rather than a consistency rule (RSRMID-3018).
+#
 #   scripts/node-policy.sh                   # report drift everywhere
 #   scripts/node-policy.sh php-sdk node-sdk  # restrict to named repositories
 #   scripts/node-policy.sh --verbose         # also print the repositories that are clean
@@ -73,7 +78,8 @@ ws_need jq "needed to read the GitHub API"
 # shellcheck source=.github/node-policy.conf
 . "$POLICY_FILE"
 
-for var in POLICY_ENGINES_NODE POLICY_ENGINES_NPM POLICY_DEV_ENGINES_PACKAGE_MANAGER POLICY_LOCKFILE; do
+for var in POLICY_ENGINES_NODE POLICY_ENGINES_NPM POLICY_DEV_ENGINES_PACKAGE_MANAGER POLICY_LOCKFILE \
+  POLICY_PNPM_SETTINGS_FILE POLICY_PNPM_MINIMUM_RELEASE_AGE; do
   [ -n "${!var:-}" ] || ws_die "$POLICY_FILE does not set $var"
 done
 
@@ -97,9 +103,10 @@ is_excluded() {
 }
 
 # --- per-repository checks ---------------------------------------------------
-# Both API reads are per repository and neither is cached, so this costs two requests
-# per repository. That is well inside the authenticated rate limit for an organisation
-# this size, and it keeps the check stateless.
+# Every API read is per repository and none is cached, so this costs up to three requests
+# per repository — the root listing, package.json, and pnpm-workspace.yaml. That is well
+# inside the authenticated rate limit for an organisation this size, and it keeps the
+# check stateless.
 
 # Root listing, one name per line. A repository with no default branch (freshly created,
 # never pushed) returns 404 here, which is a failure to report rather than a clean pass.
@@ -109,6 +116,37 @@ root_entries() {
 
 manifest() {
   gh api "repos/$ORG/$1/contents/package.json" --jq '.content' 2>/dev/null | base64 -d 2>/dev/null
+}
+
+pnpm_settings() {
+  gh api "repos/$ORG/$1/contents/$POLICY_PNPM_SETTINGS_FILE" --jq '.content' 2>/dev/null | base64 -d 2>/dev/null
+}
+
+# Value of one top-level key in pnpm-workspace.yaml, or the absent sentinel.
+#
+# This reads YAML with awk, which is a bounded thing to do only because of what it is
+# asked: top-level keys of a flat settings file, matched anchored to column one so a
+# nested key of the same name under `overrides:` cannot answer for the real one. It is
+# not a YAML parser and must not be grown into one — a settings file that needs more
+# than this to understand is a settings file that has stopped being a settings file.
+pnpm_setting() {
+  local out
+  out="$(printf '%s\n' "$1" | awk -v k="$2" '
+    index($0, k ":") == 1 {
+      v = substr($0, length(k) + 2)
+      sub(/^[ \t]+/, "", v)
+      sub(/[ \t]*#.*$/, "", v)
+      sub(/[ \t]+$/, "", v)
+      print v
+      found = 1
+      exit
+    }
+    END { if (!found) exit 1 }
+  ')" || {
+    printf '%s' "$SENTINEL_ABSENT"
+    return
+  }
+  printf '%s' "$out"
 }
 
 # Compares one field and appends to DRIFT when it differs. Literal string comparison:
@@ -131,6 +169,39 @@ fmt_value() {
 }
 
 SENTINEL_ABSENT=$'\001absent'
+
+# minimumReleaseAge is a supply-chain control, so an unreadable settings file is a
+# failure and never a pass: "we could not tell" must not report the same as "it is set".
+# The file being absent is drift rather than a failure — the setting has to be declared,
+# because an inherited default is not a decision and cannot be reported when it changes.
+#
+# Unlike the earlier reads, an unreadable file here reports through DRIFT as well as
+# FAILED instead of returning early. By this point the package.json checks have already
+# run, and a repository that cannot be fully checked is still worth telling the truth
+# about the part that was.
+check_pnpm_settings() {
+  local name="$1" entries="$2" yaml age key
+
+  if ! printf '%s\n' "$entries" | grep -qxF "$POLICY_PNPM_SETTINGS_FILE"; then
+    DRIFT+=("$POLICY_PNPM_SETTINGS_FILE is missing — it must declare minimumReleaseAge: $POLICY_PNPM_MINIMUM_RELEASE_AGE")
+    return
+  fi
+
+  yaml="$(pnpm_settings "$name")"
+  if [ -z "$yaml" ]; then
+    FAILED+=("$name")
+    DRIFT+=("$POLICY_PNPM_SETTINGS_FILE is listed but could not be read — minimumReleaseAge is unverified, which is not the same as satisfied")
+    return
+  fi
+
+  age="$(pnpm_setting "$yaml" minimumReleaseAge)"
+  compare 'minimumReleaseAge' "$age" "$POLICY_PNPM_MINIMUM_RELEASE_AGE"
+
+  for key in ${POLICY_FORBIDDEN_PNPM_SETTINGS:-}; do
+    [ "$(pnpm_setting "$yaml" "$key")" = "$SENTINEL_ABSENT" ] ||
+      DRIFT+=("$key must not exist — see node-policy.conf for why the allowlists were retired")
+  done
+}
 
 check_repo() {
   local name="$1" entries pj
@@ -215,6 +286,8 @@ check_repo() {
     printf '%s\n' "$entries" | grep -qxF "$f" &&
       DRIFT+=("$f must not exist — this repository installs with pnpm")
   done
+
+  check_pnpm_settings "$name" "$entries"
 
   if [ "${#DRIFT[@]}" -eq 0 ]; then
     CLEAN=$((CLEAN + 1))
