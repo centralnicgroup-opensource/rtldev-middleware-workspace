@@ -1,0 +1,7 @@
+# pnpm settings. Not .npmrc, and not the `pnpm` field of package.json — pnpm 10 stopped
+# reading that field and only warned about it.
+
+# Nothing is installed here that is younger than a day. See .github/node-policy.conf for
+# why this is a supply-chain control rather than a consistency rule, and why `0` is not
+# the answer when a build is blocked by it. (RSRMID-3018)
+minimumReleaseAge: 1440
