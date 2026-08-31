@@ -40,7 +40,7 @@ rtldev-middleware-java-sdk	customer-facing,releases-via-deploykey
 rtldev-middleware-python-sdk	customer-facing,releases-via-deploykey
 rtldev-middleware-go-sdk	customer-facing,releases-via-deploykey
 rtldev-middleware-perl-sdk	customer-facing	archived
-rtldev-middleware-whmcs	customer-facing
+rtldev-middleware-whmcs	customer-facing,releases-via-deploykey
 rtldev-middleware-blesta	customer-facing,releases-via-deploykey
 rtldev-middleware-idna-uts46	customer-facing,releases-via-deploykey
 rtldev-middleware-php-idna-translator	customer-facing,releases-via-deploykey
