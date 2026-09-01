@@ -160,7 +160,15 @@ ws_info "Discovering ${REPO_PREFIX}* repositories in $ORG ..."
 DISCOVERED="$(discover)"
 [ -n "$DISCOVERED" ] || ws_die "discovery returned nothing — refusing to read that as 'no repositories'"
 
-UNREGISTERED="$(comm -23 <(printf '%s\n' "$DISCOVERED" | cut -f1 | sort) <(register_names))"
+# Coverage is asked of the active repositories only. A retired repository is archived,
+# and GitHub rejects settings writes on an archived repository — so demanding a register
+# entry for one would demand an edit that can never be acted on. Archived repositories
+# are filtered out of the coverage question here rather than out of discovery, so that a
+# register which still names one is skipped by name further down instead of being handed
+# to the engine.
+ACTIVE="$(printf '%s\n' "$DISCOVERED" | awk -F'\t' '$2 == "false" { print $1 }' | sort)"
+
+UNREGISTERED="$(comm -23 <(printf '%s\n' "$ACTIVE") <(register_names))"
 VANISHED="$(comm -13 <(printf '%s\n' "$DISCOVERED" | cut -f1 | sort) <(register_names))"
 
 if [ -n "$UNREGISTERED" ]; then

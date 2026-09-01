@@ -34,7 +34,7 @@ cd rtldev-middleware-workspace
 
 ## The repositories
 
-Eighteen public, non-archived `rtldev-middleware-*` repositories. The register lives in
+Fifteen public, non-archived `rtldev-middleware-*` repositories. The register lives in
 [.gitmodules](.gitmodules) and is reconciled against GitHub by `./scripts/ws.sh add` —
 run weekly by [repos-drift.yml](.github/workflows/repos-drift.yml), which fails when a
 new repository exists that nobody has registered here.
@@ -164,8 +164,33 @@ from the register, so a repository that exists in the organisation but is absent
 central: a per-repository drift job cannot report a repository that never received the
 job.
 
-Archived repositories stay listed with their profile and are skipped at run time —
-GitHub rejects settings writes on them, so archiving one needs no edit here.
+Archived repositories are out of scope — see "Retiring a repository" below. The coverage
+question is asked of the active repositories only, so an archived one is neither required
+in `_register.tsv` nor a failure when absent from it.
+
+### Retiring a repository
+
+When we stop maintaining an `rtldev-middleware-*` repository:
+
+| Step       | Rule                                                                    |
+| ---------- | ----------------------------------------------------------------------- |
+| Outcome    | **Archive it.** Never delete — archiving is reversible, deletion is not |
+| Visibility | Customer-facing → archive **public**. Everything else → **internal**    |
+| Coverage   | It leaves the checks: out of `_register.tsv`, out of `.gitmodules`      |
+
+**Set the visibility before archiving.** GitHub will not change the visibility of an
+archived repository, so an internal-bound one has to be made internal first and archived
+second. Doing it the other way round means unarchiving to fix it.
+
+A public repository that is archived rather than made internal stays public on purpose.
+Moving it out of `centralnicgroup-opensource` would not unpublish it — forks, clones and
+any published package pointing at it all persist — so for anything customer-facing the
+honest end state is an archived public repository, not a hidden one.
+
+Nothing needs to be added anywhere to retire a repository; things need to be **removed**.
+`org-settings.sh` and `node-policy.sh` both skip archived repositories at run time
+already, and the settings drift job stops demanding a register entry once the repository
+is archived.
 
 ### The Node toolchain policy
 
