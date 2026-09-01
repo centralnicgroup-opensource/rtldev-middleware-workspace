@@ -10,8 +10,9 @@
 #
 # WHERE THE VALUES COME FROM
 #
-# From the environment, one variable per name in .github/eol-policy.conf. That is not a
-# convenience: it is how the scheduled workflow supplies them, out of the Actions vars
+# From the environment, one variable per name in .github/eol-policy.conf — both the ones
+# holding a version and the ones a PRODUCT of the form @VARIABLE selects with. That is not
+# a convenience: it is how the scheduled workflow supplies them, out of the Actions vars
 # context, which needs no token scope at all. Fetching them here instead would have made
 # the job depend on a credential that reads organisation variables, and a fine-grained PAT
 # can only do that when its resource owner is the organisation itself.
@@ -39,6 +40,12 @@
 #             but still supported release is not flagged for ever.
 #
 # The literal value "latest" always passes without an API call, as it did before.
+#
+# A fourth thing can go wrong before any of those, and is reported as a failure rather than
+# drift: the policy can name the product indirectly, as @VARIABLE, and that variable can be
+# unset or hold a value POLICY_PRODUCT_MAP does not translate. Nothing is assumed in that
+# case — a default product would be some vendor's real end-of-life dates applied to a
+# toolchain from another vendor, which is the mistake the indirection exists to stop.
 #
 # Read-only. It never writes to GitHub and never edits a variable; changing a version is a
 # decision someone makes in the organisation settings and in the repositories that follow.
@@ -86,6 +93,8 @@ ws_need curl "needed to read the endoflife.date API"
 
 [ -n "${POLICY_CHECKS:-}" ] || ws_die "$POLICY_FILE does not set POLICY_CHECKS"
 [ -n "${POLICY_API_BASE:-}" ] || ws_die "$POLICY_FILE does not set POLICY_API_BASE"
+# Optional: a policy that names every product directly needs no mappings at all.
+POLICY_PRODUCT_MAP="${POLICY_PRODUCT_MAP:-}"
 
 # --- values ------------------------------------------------------------------
 # --from-api populates the environment from the organisation, so that everything below
@@ -143,11 +152,57 @@ cycles_json() {
   jq -cn --arg c "$raw" '[$c]'
 }
 
+# --- the product a variable is checked against -------------------------------
+# A PRODUCT column of the form @OTHER_VARIABLE names the variable that selects the product
+# rather than the product itself, and POLICY_PRODUCT_MAP translates that variable's value
+# into an endoflife.date product. Java needs it: the distribution is an organisation
+# variable, the vendors keep different calendars for the same cycle, and the two sides
+# spell the same vendor differently (temurin against eclipse-temurin), so neither a pinned
+# product nor a derived one is correct.
+#
+# Sets RESOLVED_PRODUCT, or RESOLVE_ERROR and a non-zero status. Never falls back to a
+# default: an unresolvable selector is a failure, because the alternative is reporting one
+# vendor's dates for another vendor's toolchain and calling it a pass.
+RESOLVED_PRODUCT=''
+RESOLVE_ERROR=''
+
+resolve_product() {
+  local spec="$1" selector selected m_var m_value m_product
+  RESOLVED_PRODUCT=''
+  RESOLVE_ERROR=''
+
+  case "$spec" in
+    @*) selector="${spec#@}" ;;
+    *)
+      RESOLVED_PRODUCT="$spec"
+      return 0
+      ;;
+  esac
+
+  selected="${!selector:-}"
+  if [ -z "$selected" ]; then
+    RESOLVE_ERROR="selects its product from $selector, which is unset or empty"
+    return 1
+  fi
+
+  while read -r m_var m_value m_product; do
+    [ -n "$m_var" ] || continue
+    case "$m_var" in \#*) continue ;; esac
+    if [ "$m_var" = "$selector" ] && [ "$m_value" = "$selected" ]; then
+      RESOLVED_PRODUCT="$m_product"
+      return 0
+    fi
+  done <<<"$POLICY_PRODUCT_MAP"
+
+  RESOLVE_ERROR="$selector='$selected' has no product in POLICY_PRODUCT_MAP — map that value or correct the variable"
+  return 1
+}
+
 # --- one variable ------------------------------------------------------------
 
 check_one() {
-  local variable="$1" product="$2" min="$3" max="$4"
-  local raw cycles file analysis n_in
+  local variable="$1" spec="$2" min="$3" max="$4"
+  local product raw cycles file analysis n_in
   local invalid outside eol missing newest input_idx newest_idx
 
   raw="${!variable:-}"
@@ -156,6 +211,15 @@ check_one() {
     printf '%-30s %s\n' "$variable" "unset or empty — not read as 'nothing to check'"
     return
   fi
+
+  # Before the value, the product: a "latest" value would otherwise pass a variable whose
+  # selector is broken, and that selector feeds every workflow reading the distribution.
+  resolve_product "$spec" || {
+    FAILED+=("$variable")
+    printf '%-30s %s\n' "$variable" "$RESOLVE_ERROR"
+    return
+  }
+  product="$RESOLVED_PRODUCT"
 
   [ "$product" = "ubuntu" ] && raw="$(runner_label_to_cycle "$raw")"
 
