@@ -172,11 +172,11 @@ in `_register.tsv` nor a failure when absent from it.
 
 When we stop maintaining an `rtldev-middleware-*` repository:
 
-| Step       | Rule                                                                    |
-| ---------- | ----------------------------------------------------------------------- |
-| Outcome    | **Archive it.** Never delete — archiving is reversible, deletion is not |
-| Visibility | Customer-facing → archive **public**. Everything else → **internal**    |
-| Coverage   | It leaves the checks: out of `_register.tsv`, out of `.gitmodules`      |
+| Step       | Rule                                                                              |
+| ---------- | --------------------------------------------------------------------------------- |
+| Outcome    | **Archive it.** Never delete _instead_ — archiving is reversible, deletion is not |
+| Visibility | Customer-facing → archive **public**. Everything else → **internal**              |
+| Coverage   | It leaves the checks: out of `_register.tsv`, out of `.gitmodules`                |
 
 **Set the visibility before archiving.** GitHub will not change the visibility of an
 archived repository, so an internal-bound one has to be made internal first and archived
@@ -186,6 +186,11 @@ A public repository that is archived rather than made internal stays public on p
 Moving it out of `centralnicgroup-opensource` would not unpublish it — forks, clones and
 any published package pointing at it all persist — so for anything customer-facing the
 honest end state is an archived public repository, not a hidden one.
+
+**Deleting it later is a separate, per-case decision.** Archiving is the retirement step
+and deletion is never a shortcut past it, but a repository that has been archived for a
+while and that nothing depends on any more may still be deleted — judged at that point,
+on that repository, rather than mandated or forbidden here.
 
 Nothing needs to be added anywhere to retire a repository; things need to be **removed**.
 `org-settings.sh` and `node-policy.sh` both skip archived repositories at run time
