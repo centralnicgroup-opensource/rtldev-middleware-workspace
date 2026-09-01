@@ -1,0 +1,71 @@
+---
+# Reports when an organisation-wide CI version variable has reached end of life, or when a
+# newer supported release cycle has moved past it — Node, Go, Java, Python, PHP and the
+# runner image, each against https://endoflife.date.
+#
+# This replaces the daily check that rtldev-middleware-gh-actions-endoflife ran from its
+# own check-custom-vars.yml. The values stay where they are, as Actions organisation
+# variables; only the checking moves here, next to the two sibling drift jobs.
+# (RSRMID-3029)
+#
+# WHY THE VALUES ARE PASSED IN AS env RATHER THAN FETCHED
+#
+# The vars context is populated by GitHub for the workflow with no token scope at all,
+# which is how the action did it. Reading them through the API instead would need a
+# fine-grained PAT whose resource owner is the organisation — a personal-account token
+# cannot reach organisation variables however much repository access it holds — so
+# fetching would have made a job that needs no credential depend on one of the hardest
+# credentials here to obtain.
+#
+# An unset or empty variable is a failure in eol-policy.sh, not a silent pass, so a
+# variable renamed or removed at the organisation level turns the run red rather than
+# quietly dropping out of the check.
+#
+# Read-only by construction — scripts/eol-policy.sh has no write mode at all. Moving to a
+# newer cycle is a change to the organisation variable and to the repositories that follow
+# it, not something a drift job should do on anyone's behalf.
+name: EOL policy drift
+
+on:
+  schedule:
+    # Daily, matching the cadence the action ran at — a cycle reaching end of life is
+    # dated, so a weekly check could sit on the news for six days. 06:15 keeps it clear of
+    # the settings job at 06:00 and the register job at 06:30.
+    - cron: "15 6 * * *"
+  workflow_dispatch:
+
+# No pull_request trigger, matching the sibling drift jobs. The job fails when a version
+# somebody else controls has aged, which no commit in this repository can fix, so a PR
+# trigger would make pull requests here red for reasons they cannot address. Run it by
+# hand (workflow_dispatch, or scripts/eol-policy.sh locally) when changing the policy.
+
+permissions:
+  contents: read
+
+jobs:
+  drift:
+    name: EOL policy drift
+    runs-on: ${{ vars.RTLDEV_MW_CI_OS || 'ubuntu-latest' }}
+    steps:
+      - uses: actions/checkout@v5
+
+      # Every variable named in .github/eol-policy.conf has to appear here. A name in the
+      # policy with no line below reaches the script unset, and is reported as a failure
+      # rather than skipped — which is the intended way to notice this list has fallen
+      # behind the policy.
+      #
+      # No GH_TOKEN: this job reads endoflife.date and nothing on GitHub.
+      - name: Check the CI version variables against endoflife.date
+        env:
+          RTLDEV_MW_CI_NODE_VERSION: ${{ vars.RTLDEV_MW_CI_NODE_VERSION }}
+          RTLDEV_MW_CI_NODE_MATRIX: ${{ vars.RTLDEV_MW_CI_NODE_MATRIX }}
+          RTLDEV_MW_CI_GOLANG_VERSION: ${{ vars.RTLDEV_MW_CI_GOLANG_VERSION }}
+          RTLDEV_MW_CI_GOLANG_MATRIX: ${{ vars.RTLDEV_MW_CI_GOLANG_MATRIX }}
+          RTLDEV_MW_CI_JAVA_VERSION: ${{ vars.RTLDEV_MW_CI_JAVA_VERSION }}
+          RTLDEV_MW_CI_JAVA_MATRIX: ${{ vars.RTLDEV_MW_CI_JAVA_MATRIX }}
+          RTLDEV_MW_CI_PYTHON_VERSION: ${{ vars.RTLDEV_MW_CI_PYTHON_VERSION }}
+          RTLDEV_MW_CI_PYTHON_MATRIX: ${{ vars.RTLDEV_MW_CI_PYTHON_MATRIX }}
+          RTLDEV_MW_CI_PHP_VERSION: ${{ vars.RTLDEV_MW_CI_PHP_VERSION }}
+          RTLDEV_MW_CI_PHP_MATRIX: ${{ vars.RTLDEV_MW_CI_PHP_MATRIX }}
+          RTLDEV_MW_CI_OS: ${{ vars.RTLDEV_MW_CI_OS }}
+        run: scripts/eol-policy.sh --verbose
