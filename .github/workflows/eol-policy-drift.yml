@@ -49,10 +49,12 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      # Every variable named in .github/eol-policy.conf has to appear here. A name in the
-      # policy with no line below reaches the script unset, and is reported as a failure
-      # rather than skipped — which is the intended way to notice this list has fallen
-      # behind the policy.
+      # Every variable named in .github/eol-policy.conf has to appear here — the ones
+      # holding a version, and RTLDEV_MW_CI_JAVA_DISTRO, which the java rows name as
+      # @RTLDEV_MW_CI_JAVA_DISTRO to select the endoflife.date product to check against. A
+      # name in the policy with no line below reaches the script unset, and is reported as
+      # a failure rather than skipped — which is the intended way to notice this list has
+      # fallen behind the policy.
       #
       # No GH_TOKEN: this job reads endoflife.date and nothing on GitHub.
       - name: Check the CI version variables against endoflife.date
@@ -63,6 +65,7 @@ jobs:
           RTLDEV_MW_CI_GOLANG_MATRIX: ${{ vars.RTLDEV_MW_CI_GOLANG_MATRIX }}
           RTLDEV_MW_CI_JAVA_VERSION: ${{ vars.RTLDEV_MW_CI_JAVA_VERSION }}
           RTLDEV_MW_CI_JAVA_MATRIX: ${{ vars.RTLDEV_MW_CI_JAVA_MATRIX }}
+          RTLDEV_MW_CI_JAVA_DISTRO: ${{ vars.RTLDEV_MW_CI_JAVA_DISTRO }}
           RTLDEV_MW_CI_PYTHON_VERSION: ${{ vars.RTLDEV_MW_CI_PYTHON_VERSION }}
           RTLDEV_MW_CI_PYTHON_MATRIX: ${{ vars.RTLDEV_MW_CI_PYTHON_MATRIX }}
           RTLDEV_MW_CI_PHP_VERSION: ${{ vars.RTLDEV_MW_CI_PHP_VERSION }}
