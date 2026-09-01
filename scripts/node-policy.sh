@@ -25,10 +25,10 @@
 #
 # A check that walked the checkouts would be wrong, not merely incomplete. template,
 # whmcs and dnscontrol are registered submodules that are usually unpopulated, so they
-# read as "no package.json" when two of them have one; and workspace, domain-ideas and
-# gh-actions-endoflife have no submodule entry at all. Enumerating from the organisation
-# and reading package.json over the contents API is the only way to get the same answer
-# from a laptop and from CI.
+# read as "no package.json" when two of them have one; and workspace and the archived
+# semantic-release-whmcs have no submodule entry at all. Enumerating from the
+# organisation and reading package.json over the contents API is the only way to get the
+# same answer from a laptop and from CI.
 #
 # It also means coverage needs no register. Every repository in the organisation is in
 # scope from the moment it exists, and one with no package.json is reported and counted

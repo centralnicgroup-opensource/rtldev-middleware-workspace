@@ -28,10 +28,15 @@
 # management has to cover all of those, so it needs its own list.
 #
 # The same invariant applies to both: the register is the list, and GitHub is what it is
-# reconciled against. A repository that exists in the organisation and is absent here is
-# an error the drift job fails on — never "zero repositories to manage". Archived
-# repositories stay listed with their profile and are skipped at run time, because
-# GitHub rejects settings writes on them; archiving one needs no edit here.
+# reconciled against. An *active* repository that exists in the organisation and is
+# absent here is an error the drift job fails on — never "zero repositories to manage".
+#
+# Archived repositories are out of scope and belong out of this file. Archiving is how a
+# repository is retired (see "Retiring a repository" in the README), and GitHub rejects
+# settings writes on an archived repository — so a register entry for one describes an
+# intention that can never be applied. An entry left behind is tolerated rather than
+# fatal: it is skipped by name at run time. The drift job asks for coverage of the
+# active repositories only.
 
 # --- Customer-facing ---------------------------------------------------------
 rtldev-middleware-php-sdk	customer-facing,releases-via-deploykey
@@ -39,7 +44,6 @@ rtldev-middleware-node-sdk	customer-facing,releases-via-deploykey
 rtldev-middleware-java-sdk	customer-facing,releases-via-deploykey
 rtldev-middleware-python-sdk	customer-facing,releases-via-deploykey
 rtldev-middleware-go-sdk	customer-facing,releases-via-deploykey
-rtldev-middleware-perl-sdk	customer-facing	archived
 rtldev-middleware-whmcs	customer-facing,releases-via-deploykey
 rtldev-middleware-blesta	customer-facing,releases-via-deploykey
 rtldev-middleware-idna-uts46	customer-facing,releases-via-deploykey
@@ -50,16 +54,8 @@ rtldev-middleware-workspace	internal
 rtldev-middleware-template	internal
 rtldev-middleware-shareable-workflows	internal
 rtldev-middleware-devcontainer-features	internal,releases-via-deploykey
-rtldev-middleware-domain-ideas	internal
-rtldev-middleware-gh-actions-endoflife	internal
 rtldev-middleware-dnscontrol-dnsconfig	internal	test/demo config for the dnscontrol provider module
 rtldev-middleware-semantic-release-plugins	internal
-rtldev-middleware-semantic-release-whmcs	internal	archived
-rtldev-middleware-semantic-release-notes-override	internal	archived
-rtldev-middleware-gulp-release-notification-plugin	internal	archived
-rtldev-middleware-semantic-release-replace-plugin	internal	archived
-rtldev-middleware-semantic-release-notify-plugin	internal	archived
-rtldev-middleware-maven-semantic-release	internal	archived
 
 # --- Excluded ----------------------------------------------------------------
 # A fork of StackExchange/dnscontrol. Its settings are not ours to hold an opinion

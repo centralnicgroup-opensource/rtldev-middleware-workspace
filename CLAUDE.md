@@ -65,10 +65,15 @@ change that loses someone's work at the scale of every repository at once.
   request to blank the field, and an org-wide apply would blank it everywhere at once.
   Only `DESCRIPTION`, `HOMEPAGE` and `TOPICS` may opt out; every other setting is a
   policy with one right answer, so opting out of one silently must stay impossible.
-- **The settings drift job enumerates from GitHub, not from the register.** A repository
-  present in the organisation and absent from `_register.tsv` fails the run. A register
-  that is internally consistent but incomplete is the failure the central model exists to
-  prevent.
+- **The settings drift job enumerates from GitHub, not from the register.** An _active_
+  repository present in the organisation and absent from `_register.tsv` fails the run. A
+  register that is internally consistent but incomplete is the failure the central model
+  exists to prevent. Archived repositories are exempt: they are retired, and GitHub
+  rejects settings writes on them, so a register entry could never be applied.
+- **A repository we stop maintaining is archived, never deleted.** Public if it is
+  customer-facing, internal otherwise — and the visibility is set _before_ archiving,
+  because GitHub will not change it afterwards. Archiving takes it out of the checks: out
+  of `_register.tsv`, out of `.gitmodules`. See "Retiring a repository" in the README.
 
 ## Testing
 
