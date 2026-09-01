@@ -70,7 +70,8 @@ change that loses someone's work at the scale of every repository at once.
   register that is internally consistent but incomplete is the failure the central model
   exists to prevent. Archived repositories are exempt: they are retired, and GitHub
   rejects settings writes on them, so a register entry could never be applied.
-- **A repository we stop maintaining is archived, never deleted.** Public if it is
+- **A repository we stop maintaining is archived, not deleted outright** — deleting it
+  later, once it has been archived a while, is a per-case decision. Public if it is
   customer-facing, internal otherwise — and the visibility is set _before_ archiving,
   because GitHub will not change it afterwards. Archiving takes it out of the checks: out
   of `_register.tsv`, out of `.gitmodules`. See "Retiring a repository" in the README.
