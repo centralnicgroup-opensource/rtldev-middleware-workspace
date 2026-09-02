@@ -493,6 +493,8 @@ cmd_add() {
   local apply=0
   [ "${1:-}" = "--apply" ] && apply=1
 
+  ws_register_check
+
   ws_info "querying GitHub for $REPO_PREFIX* repositories in ${#WS_ORGS[@]} namespace(s): ${WS_ORGS[*]} ..."
 
   # One query, three questions asked of the same answer. The coverage check needs the

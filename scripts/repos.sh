@@ -423,21 +423,45 @@ ws_register_rows() {
 
 ws_register_names() { ws_register_rows | cut -f2 | sort; }
 
-# Rows are keyed by the bare repository name, not by <org>/<name>, so every existing
-# caller keeps working — but that only holds while the names are unique across the
-# namespaces. Checked rather than assumed: a duplicate would silently resolve to
-# whichever row happened to come first.
+# Both registers, checked before anything acts on them. Cheap, offline, and it fails on
+# the states that would otherwise turn into a wrong answer rather than an error.
+#
+# Repository names have to be unique across the namespaces, because that is how every
+# register is keyed and how every command addresses a repository: `ws.sh status php-sdk`
+# names one repository, and a duplicate would silently resolve to whichever entry came
+# first. It is checked in both registers, not just the settings one — .gitmodules is
+# looked up by name the same way, through ws_org_of.
 ws_register_check() {
-    local dupes
+    local dupes org name
+
     dupes="$(ws_register_names | uniq -d)"
     [ -z "$dupes" ] || ws_die "$(basename "$WS_REGISTER") names the same repository in more than one namespace: $(printf '%s' "$dupes" | tr '\n' ' ')"
-    local org name
+
     while IFS=$'\t' read -r org name _; do
         [ -n "$org" ] && [ -n "$name" ] ||
             ws_die "$(basename "$WS_REGISTER"): a row is missing its namespace or its repository name"
         [ -n "${WS_ORG_NEEDS_TOKEN[$org]+set}" ] ||
             ws_die "$(basename "$WS_REGISTER"): $name names namespace '$org', which this workspace knows nothing about"
     done < <(ws_register_rows)
+
+    dupes="$(ws_registered | uniq -d)"
+    [ -z "$dupes" ] || ws_die ".gitmodules registers the same repository in more than one namespace: $(printf '%s' "$dupes" | tr '\n' ' ')"
+
+    # An absent exclusion register is not "nothing is excluded" — it is a file someone
+    # deleted, and reading it as an empty list would make the drift job start failing on
+    # three sandboxes with no explanation of where their reasons went.
+    [ -f "$WS_EXCLUDE" ] || ws_die "no exclusion register at $WS_EXCLUDE"
+    local reason
+    while IFS=$'\t' read -r org name reason; do
+        [ -n "$org" ] && [ -n "$name" ] ||
+            ws_die "$(basename "$WS_EXCLUDE"): a row is missing its namespace or its repository name"
+        [ -n "${WS_ORG_NEEDS_TOKEN[$org]+set}" ] ||
+            ws_die "$(basename "$WS_EXCLUDE"): $name names namespace '$org', which this workspace knows nothing about"
+        # The reason is the file. A row without one records that someone decided, not what
+        # they decided, and is indistinguishable from the silence it exists to replace.
+        [ -n "${reason//[[:space:]]/}" ] ||
+            ws_die "$(basename "$WS_EXCLUDE"): $org/$name is excluded with no reason given"
+    done < <(ws_exclude_rows)
 }
 
 ws_register_field() {

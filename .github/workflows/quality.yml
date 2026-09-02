@@ -106,9 +106,10 @@ jobs:
           # shellcheck source=scripts/repos.sh
           . ./scripts/repos.sh
 
-          # The registers themselves: a row whose namespace this workspace knows nothing
-          # about, or a repository name claimed by two namespaces, is fatal here rather
-          # than at the first apply.
+          # The registers themselves, both of them: a row whose namespace this workspace
+          # knows nothing about, a repository name claimed by two namespaces, or an
+          # exclusion with no reason given, is fatal here rather than at the first apply.
+          # Offline — it reads the files and nothing else.
           ws_register_check
 
           # Every .gitmodules entry must have a matching gitlink (mode 160000).
