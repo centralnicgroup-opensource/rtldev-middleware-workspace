@@ -152,6 +152,13 @@ ws_token_source() {
         printf '$%s' "$var"
     elif [ -r "$WS_TOKEN_DIR/$org" ] && [ -n "$(ws_token_for_org "$org")" ]; then
         printf '%s/%s' "$WS_TOKEN_DIR" "$org"
+    elif ws_org_needs_token "$org"; then
+        # Not "gh", even when gh is authenticated. ws_with_token and ws_gh_api refuse to
+        # send gh's token to a namespace that needs its own, so reporting it as the source
+        # would answer "where does this namespace's token come from" with a token that is
+        # never used — in the one command whose whole job is to explain why a namespace
+        # came back empty.
+        printf 'none (gh'"'"'s token is not accepted for this namespace)'
     elif command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then
         printf 'gh (not namespace-specific)'
     else
