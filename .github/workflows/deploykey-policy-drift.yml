@@ -59,5 +59,12 @@ jobs:
       # fails loudly on unreadable repositories rather than passing on an empty set.
       - name: Check every repository against the releases-via-deploykey trait
         env:
+          # Both namespaces, because this check spans both: the repository whose ruleset
+          # bypass this policy exists to protect, whmcs-src, is private and in
+          # centralnicgroup. Listing deploy keys needs administration:read, which is the
+          # scope neither of the other drift jobs needs and the one most likely to be
+          # missing after a rotation — a uniformly red run is the credential, not drift.
+          WS_TOKEN_CENTRALNICGROUP_OPENSOURCE: ${{ secrets.RTLDEV_MW_CI_TOKEN }}
+          WS_TOKEN_CENTRALNICGROUP: ${{ secrets.RTLDEV_MW_CI_TOKEN_CNG }}
           GH_TOKEN: ${{ secrets.RTLDEV_MW_CI_TOKEN || secrets.GITHUB_TOKEN }}
         run: scripts/deploykey-policy.sh --verbose

@@ -45,5 +45,13 @@ jobs:
       # all of them.
       - name: Check settings against .github/repo-settings/
         env:
+          # One variable per namespace, named after it. A job that spans both namespaces
+          # has to be handed both secrets — see the credentials section of
+          # scripts/repos.sh for why the second one cannot also be called
+          # RTLDEV_MW_CI_TOKEN.
+          WS_TOKEN_CENTRALNICGROUP_OPENSOURCE: ${{ secrets.RTLDEV_MW_CI_TOKEN }}
+          WS_TOKEN_CENTRALNICGROUP: ${{ secrets.RTLDEV_MW_CI_TOKEN_CNG }}
+          # Still set, for the gh calls the engine makes directly once org-settings.sh has
+          # handed it a namespace's token — and as the fallback that lets a fork run this.
           GH_TOKEN: ${{ secrets.RTLDEV_MW_CI_TOKEN || secrets.GITHUB_TOKEN }}
         run: scripts/org-settings.sh

@@ -1,6 +1,6 @@
 ---
-# Reports rtldev-middleware-* repositories that exist on GitHub but are not registered
-# as submodules here — and registered ones that have since been archived, made private,
+# Reports rtldev-middleware-* repositories that exist in either namespace but are in
+# neither register here — and registered ones that have since been archived, excluded,
 # renamed or deleted.
 #
 # This is the failure mode that makes a workspace quietly wrong rather than broken: a
@@ -8,6 +8,12 @@
 # all our repositories" silently covers all but that one. Nothing in the workspace
 # would report it, because the register is internally consistent — it is just
 # incomplete.
+#
+# "In neither register" because there are two answers a repository can have. .gitmodules
+# says it is checked out here; .github/repos-exclude.tsv says, with a reason, that it is
+# deliberately not. Only a repository in neither fails the run — which is what makes the
+# job survivable: before that file existed, the only way to stop it complaining about a
+# sandbox nobody wants was to stop running it.
 #
 # Read-only: it runs `ws.sh add` in its default check mode, which never writes.
 # Registering stays a commit someone makes, because a new repository may deliberately
@@ -30,12 +36,19 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      # GITHUB_TOKEN is enough: the query is `GET /orgs/{org}/repos?type=public`, which
-      # needs no scope beyond public read. gh is preinstalled on the runner and ws.sh
-      # prefers it when authenticated, purely for the higher rate limit.
+      # GITHUB_TOKEN is no longer enough. Discovery now covers the private and internal
+      # repositories, and it enumerates both namespaces — an unauthenticated or wrongly
+      # scoped listing there returns [], not an error, which is the exact failure this job
+      # exists to catch, reached through the credential layer instead of the register. So
+      # each namespace is handed its own token, and ws_discover_all fails on an empty
+      # result for any single one of them rather than reporting a shorter register.
+      #
+      # GITHUB_TOKEN stays as gh's fallback so a fork still runs the public half.
       - name: Compare the register against GitHub
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          WS_TOKEN_CENTRALNICGROUP_OPENSOURCE: ${{ secrets.RTLDEV_MW_CI_TOKEN }}
+          WS_TOKEN_CENTRALNICGROUP: ${{ secrets.RTLDEV_MW_CI_TOKEN_CNG }}
+          GH_TOKEN: ${{ secrets.RTLDEV_MW_CI_TOKEN || secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           ./scripts/ws.sh add | tee register.txt
