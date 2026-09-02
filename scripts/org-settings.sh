@@ -11,8 +11,10 @@
 # The settings themselves are applied by scripts/repo-settings.sh, which this drives
 # once per repository. That split is deliberate: repo-settings.sh is the single-repository
 # engine and is the same file the template ships, so it stays comparable with the copy in
-# any repository that still carries one. Everything that knows about *many* repositories
-# — the register, the layering, the discovery check — lives here and only here.
+# any repository that still carries one. Everything that turns *many* repositories into
+# settings — the layering, the discovery check, the apply loop — lives here and only here.
+# Reading the register itself is in repos.sh, because deploykey-policy.sh reads the same
+# rows to answer a different question.
 #
 # Configuration is resolved in three layers, concatenated and sourced as shell so that a
 # later assignment simply wins:
@@ -27,7 +29,7 @@ set -uo pipefail
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/repos.sh"
 
 SETTINGS_DIR="$WS_ROOT/.github/repo-settings"
-REGISTER="$SETTINGS_DIR/_register.tsv"
+REGISTER="$WS_REGISTER"
 ENGINE="$WS_ROOT/scripts/repo-settings.sh"
 
 MODE=check
@@ -60,26 +62,6 @@ ws_need gh "needed to read and write repository settings"
 ws_need jq "needed to read the GitHub API"
 [ -f "$REGISTER" ] || ws_die "no register at $REGISTER"
 [ -x "$ENGINE" ] || ws_die "no engine at $ENGINE"
-
-# --- the register ------------------------------------------------------------
-# Comments and blank lines out, tabs preserved. Everything downstream reads
-# "<repository>\t<profile>" and ignores the note column.
-register_rows() {
-  grep -v '^[[:space:]]*#' "$REGISTER" | grep -v '^[[:space:]]*$'
-}
-
-register_names() { register_rows | cut -f1 | sort; }
-
-register_profile() {
-  local want="$1" name profile
-  while IFS=$'\t' read -r name profile _; do
-    if [ "$name" = "$want" ]; then
-      printf '%s' "$profile"
-      return 0
-    fi
-  done < <(register_rows)
-  return 1
-}
 
 # --- discovery ---------------------------------------------------------------
 # Every rtldev-middleware-* repository in the organisation, whatever its visibility or
@@ -139,7 +121,7 @@ check_profiles() {
 if [ "$RESOLVE_ONLY" -eq 1 ]; then
   [ "${#SELECTED[@]}" -gt 0 ] || ws_die "--resolve needs a repository name"
   for name in "${SELECTED[@]}"; do
-    profile="$(register_profile "$name")" || ws_die "not in the register: $name"
+    profile="$(ws_register_profile "$name")" || ws_die "not in the register: $name"
     if [ "$profile" = "exclude" ]; then
       ws_info "$name is excluded by the register — no configuration is resolved for it"
       continue
@@ -168,8 +150,8 @@ DISCOVERED="$(discover)"
 # to the engine.
 ACTIVE="$(printf '%s\n' "$DISCOVERED" | awk -F'\t' '$2 == "false" { print $1 }' | sort)"
 
-UNREGISTERED="$(comm -23 <(printf '%s\n' "$ACTIVE") <(register_names))"
-VANISHED="$(comm -13 <(printf '%s\n' "$DISCOVERED" | cut -f1 | sort) <(register_names))"
+UNREGISTERED="$(comm -23 <(printf '%s\n' "$ACTIVE") <(ws_register_names))"
+VANISHED="$(comm -13 <(printf '%s\n' "$DISCOVERED" | cut -f1 | sort) <(ws_register_names))"
 
 if [ -n "$UNREGISTERED" ]; then
   ws_warn "not in $REGISTER:"
@@ -192,17 +174,17 @@ is_archived() {
 if [ "${#SELECTED[@]}" -gt 0 ]; then
   TARGETS=("${SELECTED[@]}")
   for name in "${TARGETS[@]}"; do
-    register_profile "$name" >/dev/null || ws_die "not in the register: $name"
+    ws_register_profile "$name" >/dev/null || ws_die "not in the register: $name"
   done
 else
-  mapfile -t TARGETS < <(register_names)
+  mapfile -t TARGETS < <(ws_register_names)
 fi
 
 TMPDIR_RESOLVED="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR_RESOLVED"' EXIT
 
 for name in "${TARGETS[@]}"; do
-  profile="$(register_profile "$name")"
+  profile="$(ws_register_profile "$name")"
 
   if [ "$profile" = "exclude" ]; then
     ws_info "skip $name — excluded by the register"

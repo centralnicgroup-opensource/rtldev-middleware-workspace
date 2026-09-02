@@ -115,6 +115,52 @@ ws_select_populated() {
   fi
 }
 
+# --- the settings register ----------------------------------------------------
+# The *other* register. .gitmodules (above) lists what is checked out for bulk code
+# edits — public, non-archived, excluding this repository. This one lists what the
+# workspace manages the GitHub *settings* of, which has to cover the internal, the
+# private, the archived and this repository too. Neither is derivable from the other.
+#
+# These live here rather than in org-settings.sh because there is now more than one
+# reader: org-settings.sh resolves a row's profile column into settings, and
+# deploykey-policy.sh checks one trait from that column against the repositories
+# themselves. Two parsers of one file would eventually disagree about what a row says.
+WS_REGISTER="$WS_ROOT/.github/repo-settings/_register.tsv"
+
+# Comments and blank lines out, tabs preserved. Everything downstream reads
+# "<repository>\t<profile>" and ignores the note column.
+ws_register_rows() {
+  [ -f "$WS_REGISTER" ] || ws_die "no register at $WS_REGISTER"
+  grep -v '^[[:space:]]*#' "$WS_REGISTER" | grep -v '^[[:space:]]*$'
+}
+
+ws_register_names() { ws_register_rows | cut -f1 | sort; }
+
+ws_register_profile() {
+  local want="$1" name profile
+  while IFS=$'\t' read -r name profile _; do
+    if [ "$name" = "$want" ]; then
+      printf '%s' "$profile"
+      return 0
+    fi
+  done < <(ws_register_rows)
+  return 1
+}
+
+# True when a profile column names <trait>. The column is split on commas and each field
+# compared for equality — never a substring test against the whole column. A trait name
+# is a prefix of any longer trait name someone adds later, and a grep would then answer
+# yes for a trait the register does not carry.
+ws_profile_has() {
+  local profiles="$1" want="$2" p
+  local -a plist
+  IFS=',' read -r -a plist <<<"$profiles"
+  for p in "${plist[@]}"; do
+    [ "${p//[[:space:]]/}" = "$want" ] && return 0
+  done
+  return 1
+}
+
 # --- GitHub discovery --------------------------------------------------------
 # Public, unauthenticated REST works for the whole query, so the workspace can be set
 # up before anyone runs `gh auth login`. gh is preferred when it is authenticated
