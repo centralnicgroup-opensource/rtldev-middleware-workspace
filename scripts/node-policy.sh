@@ -87,8 +87,16 @@ done
 # type=all, because the policy covers the private and internal repositories too — the
 # Node toolchain of a repository nobody outside the company can see still decides what
 # our own CI runs on.
+#
+# One namespace, deliberately, while its sibling deploykey-policy.sh reads both. This
+# check needs no register: it enumerates and checks everything with a package.json, so
+# widening it would add nine manifests that have never been compared against
+# node-policy.conf at all. Comparison here is literal string equality, so each of them is
+# drift until a commit lands in that repository — and a weekly job that is red for
+# reasons this repository cannot fix is a job nobody reads. RSRMID-3036 widens it, after
+# finding out what the drift is.
 discover() {
-  gh api --paginate "orgs/$ORG/repos?type=all&per_page=100" 2>/dev/null \
+  ws_gh "$WS_ORG_OPENSOURCE" api --paginate "orgs/$WS_ORG_OPENSOURCE/repos?type=all&per_page=100" 2>/dev/null \
     | jq -r --arg p "$REPO_PREFIX" '
         .[] | select(.name | startswith($p)) | [.name, (.archived | tostring)] | @tsv
       '
@@ -111,15 +119,15 @@ is_excluded() {
 # Root listing, one name per line. A repository with no default branch (freshly created,
 # never pushed) returns 404 here, which is a failure to report rather than a clean pass.
 root_entries() {
-  gh api "repos/$ORG/$1/contents" --jq '.[].name' 2>/dev/null
+  ws_gh "$WS_ORG_OPENSOURCE" api "repos/$WS_ORG_OPENSOURCE/$1/contents" --jq '.[].name' 2>/dev/null
 }
 
 manifest() {
-  gh api "repos/$ORG/$1/contents/package.json" --jq '.content' 2>/dev/null | base64 -d 2>/dev/null
+  ws_gh "$WS_ORG_OPENSOURCE" api "repos/$WS_ORG_OPENSOURCE/$1/contents/package.json" --jq '.content' 2>/dev/null | base64 -d 2>/dev/null
 }
 
 pnpm_settings() {
-  gh api "repos/$ORG/$1/contents/$POLICY_PNPM_SETTINGS_FILE" --jq '.content' 2>/dev/null | base64 -d 2>/dev/null
+  ws_gh "$WS_ORG_OPENSOURCE" api "repos/$WS_ORG_OPENSOURCE/$1/contents/$POLICY_PNPM_SETTINGS_FILE" --jq '.content' 2>/dev/null | base64 -d 2>/dev/null
 }
 
 # Value of one top-level key in pnpm-workspace.yaml, or the absent sentinel.
@@ -303,7 +311,7 @@ check_repo() {
 
 # --- run ---------------------------------------------------------------------
 
-ws_info "Discovering ${REPO_PREFIX}* repositories in $ORG ..."
+ws_info "Discovering ${REPO_PREFIX}* repositories in $WS_ORG_OPENSOURCE ..."
 DISCOVERED="$(discover)"
 [ -n "$DISCOVERED" ] || ws_die "discovery returned nothing — refusing to read that as 'no repositories'"
 
@@ -311,7 +319,7 @@ if [ "${#SELECTED[@]}" -gt 0 ]; then
   TARGETS=("${SELECTED[@]}")
   for name in "${TARGETS[@]}"; do
     printf '%s\n' "$DISCOVERED" | cut -f1 | grep -qxF "$name" ||
-      ws_die "not found in $ORG: $name"
+      ws_die "not found in $WS_ORG_OPENSOURCE: $name"
   done
 else
   mapfile -t TARGETS < <(printf '%s\n' "$DISCOVERED" | cut -f1 | sort)

@@ -1,60 +1,60 @@
-[submodule "repos/rtldev-middleware-blesta"]
-	path = repos/rtldev-middleware-blesta
+[submodule "repos/centralnicgroup-opensource/rtldev-middleware-blesta"]
+	path = repos/centralnicgroup-opensource/rtldev-middleware-blesta
 	url = https://github.com/centralnicgroup-opensource/rtldev-middleware-blesta.git
 	branch = master
-[submodule "repos/rtldev-middleware-devcontainer-features"]
-	path = repos/rtldev-middleware-devcontainer-features
+[submodule "repos/centralnicgroup-opensource/rtldev-middleware-devcontainer-features"]
+	path = repos/centralnicgroup-opensource/rtldev-middleware-devcontainer-features
 	url = https://github.com/centralnicgroup-opensource/rtldev-middleware-devcontainer-features.git
 	branch = main
-[submodule "repos/rtldev-middleware-dnscontrol"]
-	path = repos/rtldev-middleware-dnscontrol
+[submodule "repos/centralnicgroup-opensource/rtldev-middleware-dnscontrol"]
+	path = repos/centralnicgroup-opensource/rtldev-middleware-dnscontrol
 	url = https://github.com/centralnicgroup-opensource/rtldev-middleware-dnscontrol.git
 	branch = master
-[submodule "repos/rtldev-middleware-dnscontrol-dnsconfig"]
-	path = repos/rtldev-middleware-dnscontrol-dnsconfig
+[submodule "repos/centralnicgroup-opensource/rtldev-middleware-dnscontrol-dnsconfig"]
+	path = repos/centralnicgroup-opensource/rtldev-middleware-dnscontrol-dnsconfig
 	url = https://github.com/centralnicgroup-opensource/rtldev-middleware-dnscontrol-dnsconfig.git
 	branch = master
-[submodule "repos/rtldev-middleware-go-sdk"]
-	path = repos/rtldev-middleware-go-sdk
+[submodule "repos/centralnicgroup-opensource/rtldev-middleware-go-sdk"]
+	path = repos/centralnicgroup-opensource/rtldev-middleware-go-sdk
 	url = https://github.com/centralnicgroup-opensource/rtldev-middleware-go-sdk.git
 	branch = master
-[submodule "repos/rtldev-middleware-idna-uts46"]
-	path = repos/rtldev-middleware-idna-uts46
+[submodule "repos/centralnicgroup-opensource/rtldev-middleware-idna-uts46"]
+	path = repos/centralnicgroup-opensource/rtldev-middleware-idna-uts46
 	url = https://github.com/centralnicgroup-opensource/rtldev-middleware-idna-uts46.git
 	branch = master
-[submodule "repos/rtldev-middleware-java-sdk"]
-	path = repos/rtldev-middleware-java-sdk
+[submodule "repos/centralnicgroup-opensource/rtldev-middleware-java-sdk"]
+	path = repos/centralnicgroup-opensource/rtldev-middleware-java-sdk
 	url = https://github.com/centralnicgroup-opensource/rtldev-middleware-java-sdk.git
 	branch = master
-[submodule "repos/rtldev-middleware-node-sdk"]
-	path = repos/rtldev-middleware-node-sdk
+[submodule "repos/centralnicgroup-opensource/rtldev-middleware-node-sdk"]
+	path = repos/centralnicgroup-opensource/rtldev-middleware-node-sdk
 	url = https://github.com/centralnicgroup-opensource/rtldev-middleware-node-sdk.git
 	branch = master
-[submodule "repos/rtldev-middleware-php-idna-translator"]
-	path = repos/rtldev-middleware-php-idna-translator
+[submodule "repos/centralnicgroup-opensource/rtldev-middleware-php-idna-translator"]
+	path = repos/centralnicgroup-opensource/rtldev-middleware-php-idna-translator
 	url = https://github.com/centralnicgroup-opensource/rtldev-middleware-php-idna-translator.git
 	branch = main
-[submodule "repos/rtldev-middleware-php-sdk"]
-	path = repos/rtldev-middleware-php-sdk
+[submodule "repos/centralnicgroup-opensource/rtldev-middleware-php-sdk"]
+	path = repos/centralnicgroup-opensource/rtldev-middleware-php-sdk
 	url = https://github.com/centralnicgroup-opensource/rtldev-middleware-php-sdk.git
 	branch = main
-[submodule "repos/rtldev-middleware-python-sdk"]
-	path = repos/rtldev-middleware-python-sdk
+[submodule "repos/centralnicgroup-opensource/rtldev-middleware-python-sdk"]
+	path = repos/centralnicgroup-opensource/rtldev-middleware-python-sdk
 	url = https://github.com/centralnicgroup-opensource/rtldev-middleware-python-sdk.git
 	branch = master
-[submodule "repos/rtldev-middleware-semantic-release-plugins"]
-	path = repos/rtldev-middleware-semantic-release-plugins
+[submodule "repos/centralnicgroup-opensource/rtldev-middleware-semantic-release-plugins"]
+	path = repos/centralnicgroup-opensource/rtldev-middleware-semantic-release-plugins
 	url = https://github.com/centralnicgroup-opensource/rtldev-middleware-semantic-release-plugins.git
 	branch = main
-[submodule "repos/rtldev-middleware-shareable-workflows"]
-	path = repos/rtldev-middleware-shareable-workflows
+[submodule "repos/centralnicgroup-opensource/rtldev-middleware-shareable-workflows"]
+	path = repos/centralnicgroup-opensource/rtldev-middleware-shareable-workflows
 	url = https://github.com/centralnicgroup-opensource/rtldev-middleware-shareable-workflows.git
 	branch = main
-[submodule "repos/rtldev-middleware-template"]
-	path = repos/rtldev-middleware-template
+[submodule "repos/centralnicgroup-opensource/rtldev-middleware-template"]
+	path = repos/centralnicgroup-opensource/rtldev-middleware-template
 	url = https://github.com/centralnicgroup-opensource/rtldev-middleware-template.git
 	branch = main
-[submodule "repos/rtldev-middleware-whmcs"]
-	path = repos/rtldev-middleware-whmcs
+[submodule "repos/centralnicgroup-opensource/rtldev-middleware-whmcs"]
+	path = repos/centralnicgroup-opensource/rtldev-middleware-whmcs
 	url = https://github.com/centralnicgroup-opensource/rtldev-middleware-whmcs.git
 	branch = main

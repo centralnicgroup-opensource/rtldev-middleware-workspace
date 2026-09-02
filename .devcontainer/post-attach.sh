@@ -52,6 +52,16 @@ elif [ "$ready" -lt "$total" ]; then
   printf '  ./scripts/ws.sh status   for the full table, ./scripts/ws.sh sync to add more\n'
 fi
 [ "$drift" -gt 0 ] && printf '  %d checkout(s) differ from the pinned commit - ./scripts/ws.sh status\n' "$drift"
+
+# The repositories span two GitHub namespaces with one token each, so git needs a helper
+# that chooses between them by URL path. Reported rather than installed: this writes to
+# .git/config, and an attach hook that silently rewrites someone's credential
+# configuration is not a thing an attach hook should do.
+helper="$PWD/scripts/git-credential-ws.sh"
+if [ -x "$helper" ] &&
+  [ "$(git config --local --get credential.https://github.com.helper 2>/dev/null)" != "$helper" ]; then
+  printf '  Per-namespace git credentials are not installed - ./scripts/ws.sh credentials\n'
+fi
 printf '\n'
 
 exit 0

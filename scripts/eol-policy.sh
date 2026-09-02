@@ -101,10 +101,10 @@ POLICY_PRODUCT_MAP="${POLICY_PRODUCT_MAP:-}"
 # reads values the same way whichever source they came from.
 
 if [ "$FROM_API" -eq 1 ]; then
-  ws_info "Reading the organisation variables of $ORG ..."
-  API_VARS="$(gh api --paginate "orgs/$ORG/actions/variables?per_page=100" --jq '.variables[] | "\(.name)=\(.value)"' 2>&1)" || {
+  ws_info "Reading the organisation variables of $WS_ORG_OPENSOURCE ..."
+  API_VARS="$(ws_gh "$WS_ORG_OPENSOURCE" api --paginate "orgs/$WS_ORG_OPENSOURCE/actions/variables?per_page=100" --jq '.variables[] | "\(.name)=\(.value)"' 2>&1)" || {
     ws_info "$API_VARS"
-    ws_die "could not read the organisation variables of $ORG.
+    ws_die "could not read the organisation variables of $WS_ORG_OPENSOURCE.
   This needs a fine-grained PAT whose resource owner is the organisation, with
   Organization permissions -> Variables: Read. A token owned by a personal account
   cannot reach organisation variables however much repository access it holds.

@@ -1,6 +1,15 @@
 # The register of repositories whose GitHub settings this workspace manages.
 #
-# Tab-separated: <repository>\t<profile>\t<note>
+# Tab-separated: <namespace>\t<repository>\t<profile>\t<note>
+#
+# The namespace column is not decoration. The engine is invoked as `--repo <org>/<name>`,
+# and while there was a single organisation hardcoded in scripts/repos.sh a row for the
+# other one resolved to a repository that does not exist — which is exactly why
+# rtldev-middleware-whmcs-src, whose deploy-key ruleset bypass this register is the only
+# record of, could not be registered here at all before RSRMID-3027.
+#
+# Repository names are unique across the namespaces and rows are looked up by name alone;
+# a duplicate is a fatal error rather than a first-match win (ws_register_check).
 #
 # profile is one of:
 #   customer-facing   ships software our customers use — issues on
@@ -24,11 +33,16 @@
 #
 # This is a second register alongside .gitmodules, not a duplicate of it. .gitmodules
 # records what is checked out as a submodule for bulk *code* edits: it excludes the
-# workspace itself, and excludes archived and non-public repositories. Settings
-# management has to cover all of those, so it needs its own list.
+# workspace itself, excludes archived repositories, and excludes whatever
+# .github/repos-exclude.tsv declares out of scope. Settings management has to cover the
+# first two of those, so it needs its own list.
+#
+# Visibility is no longer one of the differences. Both registers now carry the private and
+# internal repositories: a repository releasing over a deploy key needs its ruleset
+# managed whether or not the public can read it.
 #
 # The same invariant applies to both: the register is the list, and GitHub is what it is
-# reconciled against. An *active* repository that exists in the organisation and is
+# reconciled against. An *active* repository that exists in either organisation and is
 # absent here is an error the drift job fails on — never "zero repositories to manage".
 #
 # Archived repositories are out of scope and belong out of this file. Archiving is how a
@@ -39,25 +53,25 @@
 # active repositories only.
 
 # --- Customer-facing ---------------------------------------------------------
-rtldev-middleware-php-sdk	customer-facing,releases-via-deploykey
-rtldev-middleware-node-sdk	customer-facing,releases-via-deploykey
-rtldev-middleware-java-sdk	customer-facing,releases-via-deploykey
-rtldev-middleware-python-sdk	customer-facing,releases-via-deploykey
-rtldev-middleware-go-sdk	customer-facing,releases-via-deploykey
-rtldev-middleware-whmcs	customer-facing,releases-via-deploykey
-rtldev-middleware-blesta	customer-facing,releases-via-deploykey
-rtldev-middleware-idna-uts46	customer-facing,releases-via-deploykey
-rtldev-middleware-php-idna-translator	customer-facing,releases-via-deploykey
+centralnicgroup-opensource	rtldev-middleware-php-sdk	customer-facing,releases-via-deploykey
+centralnicgroup-opensource	rtldev-middleware-node-sdk	customer-facing,releases-via-deploykey
+centralnicgroup-opensource	rtldev-middleware-java-sdk	customer-facing,releases-via-deploykey
+centralnicgroup-opensource	rtldev-middleware-python-sdk	customer-facing,releases-via-deploykey
+centralnicgroup-opensource	rtldev-middleware-go-sdk	customer-facing,releases-via-deploykey
+centralnicgroup-opensource	rtldev-middleware-whmcs	customer-facing,releases-via-deploykey
+centralnicgroup-opensource	rtldev-middleware-blesta	customer-facing,releases-via-deploykey
+centralnicgroup-opensource	rtldev-middleware-idna-uts46	customer-facing,releases-via-deploykey
+centralnicgroup-opensource	rtldev-middleware-php-idna-translator	customer-facing,releases-via-deploykey
 
 # --- Internal ----------------------------------------------------------------
-rtldev-middleware-workspace	internal
-rtldev-middleware-template	internal
-rtldev-middleware-shareable-workflows	internal
-rtldev-middleware-devcontainer-features	internal,releases-via-deploykey
-rtldev-middleware-dnscontrol-dnsconfig	internal	test/demo config for the dnscontrol provider module
-rtldev-middleware-semantic-release-plugins	internal
+centralnicgroup-opensource	rtldev-middleware-workspace	internal
+centralnicgroup-opensource	rtldev-middleware-template	internal
+centralnicgroup-opensource	rtldev-middleware-shareable-workflows	internal
+centralnicgroup-opensource	rtldev-middleware-devcontainer-features	internal,releases-via-deploykey
+centralnicgroup-opensource	rtldev-middleware-dnscontrol-dnsconfig	internal	test/demo config for the dnscontrol provider module
+centralnicgroup-opensource	rtldev-middleware-semantic-release-plugins	internal
 
 # --- Excluded ----------------------------------------------------------------
 # A fork of StackExchange/dnscontrol. Its settings are not ours to hold an opinion
 # about, and applying the baseline would fight the upstream repository's own shape.
-rtldev-middleware-dnscontrol	exclude	3rd-party fork
+centralnicgroup-opensource	rtldev-middleware-dnscontrol	exclude	3rd-party fork

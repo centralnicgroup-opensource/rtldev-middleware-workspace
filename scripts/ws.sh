@@ -59,7 +59,7 @@ ws_report_failures() {
 # the newer ones on `main`, and hardcoding either breaks half the workspace.
 ws_tracked_branch() {
   local full="$1" b
-  b="$(git config --file .gitmodules --get "submodule.repos/$full.branch" 2>/dev/null)"
+  b="$(git config --file .gitmodules --get "submodule.$(ws_path "$full").branch" 2>/dev/null)"
   printf '%s' "${b:-main}"
 }
 
@@ -68,53 +68,87 @@ ws_repo_dirty() {
 }
 
 # --- status ------------------------------------------------------------------
+# Grouped by namespace rather than carrying it as a sixth column: the organisation names
+# are 26 characters wide, and repeating one down every row would push the table past any
+# terminal while saying the same thing fifteen times.
 cmd_status() {
-  local full short dir state branch dirty ahead behind upstream counts
+  local selection org full seen unplaced
+  selection="$(ws_select "$@")" || exit 1
+
   printf '%s%-42s %-9s %-22s %-7s %s%s\n' "$C_BLD" "REPOSITORY" "STATE" "BRANCH" "DIRTY" "VS UPSTREAM" "$C_OFF"
-  while IFS= read -r full; do
-    short="$(ws_short_name "$full")"
-    dir="$(ws_path "$full")"
-
-    if ! ws_is_populated "$full"; then
-      printf '%-42s %s%-9s%s %-22s %-7s %s\n' "$short" "$C_DIM" "empty" "$C_OFF" "-" "-" "-"
-      continue
-    fi
-
-    branch="$(git -C "$dir" rev-parse --abbrev-ref HEAD 2>/dev/null)"
-    [ "$branch" = "HEAD" ] && branch="(detached)"
-
-    if ws_repo_dirty "$dir"; then
-      dirty="${C_YEL}yes${C_OFF}"
-    else
-      dirty="${C_DIM}no${C_OFF}"
-    fi
-
-    # '+' from `git submodule status` means the checkout is at a different commit than
-    # the superproject records — expected while working, worth surfacing before a
-    # superproject commit that would either pin the new commit or silently revert it.
-    case "$(git submodule status -- "$dir" 2>/dev/null)" in
-      +*) state="${C_YEL}moved${C_OFF}" ;;
-      U*) state="${C_RED}conflict${C_OFF}" ;;
-      *) state="${C_GRN}ok${C_OFF}" ;;
-    esac
-
-    upstream="-"
-    if git -C "$dir" rev-parse --abbrev-ref '@{upstream}' >/dev/null 2>&1; then
-      counts="$(git -C "$dir" rev-list --left-right --count '@{upstream}...HEAD' 2>/dev/null)"
-      behind="${counts%%[[:space:]]*}"
-      ahead="${counts##*[[:space:]]}"
-      if [ "$ahead" = "0" ] && [ "$behind" = "0" ]; then
-        upstream="${C_DIM}in sync${C_OFF}"
-      else
-        upstream="${C_YEL}+${ahead}/-${behind}${C_OFF}"
+  for org in "${WS_ORGS[@]}"; do
+    seen=0
+    while IFS= read -r full; do
+      [ -n "$full" ] || continue
+      [ "$(ws_org_of "$full")" = "$org" ] || continue
+      if [ "$seen" -eq 0 ]; then
+        printf '%s%s%s\n' "$C_DIM" "$org" "$C_OFF"
+        seen=1
       fi
-    fi
+      ws_status_row "$full"
+    done <<<"$selection"
+  done
 
-    # The %-Ns padding is computed against the colour codes too, so the columns would
-    # skew; printing the padded plain value and the coloured value separately is the
-    # simplest thing that keeps the table aligned.
-    printf '%-42s %-9b %-22s %-7b %b\n' "$short" "$state" "$branch" "$dirty" "$upstream"
-  done < <(ws_select "$@")
+  # A submodule registered under a directory that is not one of the namespaces this
+  # workspace spans. Reported rather than dropped: silently omitting it is how a bulk
+  # operation ends up covering one repository fewer than the table said it would.
+  unplaced=0
+  while IFS= read -r full; do
+    [ -n "$full" ] || continue
+    printf '%s\n' "${WS_ORGS[@]}" | grep -qxF "$(ws_org_of "$full")" && continue
+    if [ "$unplaced" -eq 0 ]; then
+      printf '%s%s%s\n' "$C_RED" "outside every known namespace" "$C_OFF"
+      unplaced=1
+    fi
+    ws_status_row "$full"
+  done <<<"$selection"
+  [ "$unplaced" -eq 0 ] || ws_warn "registered under an unknown namespace — see WS_ORGS in scripts/repos.sh"
+}
+
+ws_status_row() {
+  local full="$1" short dir state branch dirty ahead behind upstream counts
+  short="$(ws_short_name "$full")"
+  dir="$(ws_path "$full")"
+
+  if ! ws_is_populated "$full"; then
+    printf '%-42s %s%-9s%s %-22s %-7s %s\n' "$short" "$C_DIM" "empty" "$C_OFF" "-" "-" "-"
+    return
+  fi
+
+  branch="$(git -C "$dir" rev-parse --abbrev-ref HEAD 2>/dev/null)"
+  [ "$branch" = "HEAD" ] && branch="(detached)"
+
+  if ws_repo_dirty "$dir"; then
+    dirty="${C_YEL}yes${C_OFF}"
+  else
+    dirty="${C_DIM}no${C_OFF}"
+  fi
+
+  # '+' from `git submodule status` means the checkout is at a different commit than the
+  # superproject records — expected while working, worth surfacing before a superproject
+  # commit that would either pin the new commit or silently revert it.
+  case "$(git submodule status -- "$dir" 2>/dev/null)" in
+    +*) state="${C_YEL}moved${C_OFF}" ;;
+    U*) state="${C_RED}conflict${C_OFF}" ;;
+    *) state="${C_GRN}ok${C_OFF}" ;;
+  esac
+
+  upstream="-"
+  if git -C "$dir" rev-parse --abbrev-ref '@{upstream}' >/dev/null 2>&1; then
+    counts="$(git -C "$dir" rev-list --left-right --count '@{upstream}...HEAD' 2>/dev/null)"
+    behind="${counts%%[[:space:]]*}"
+    ahead="${counts##*[[:space:]]}"
+    if [ "$ahead" = "0" ] && [ "$behind" = "0" ]; then
+      upstream="${C_DIM}in sync${C_OFF}"
+    else
+      upstream="${C_YEL}+${ahead}/-${behind}${C_OFF}"
+    fi
+  fi
+
+  # The %-Ns padding is computed against the colour codes too, so the columns would skew;
+  # printing the padded plain value and the coloured value separately is the simplest
+  # thing that keeps the table aligned.
+  printf '%-42s %-9b %-22s %-7b %b\n' "$short" "$state" "$branch" "$dirty" "$upstream"
 }
 
 # --- sync --------------------------------------------------------------------
@@ -144,7 +178,7 @@ cmd_sync() {
   [ "${#paths[@]}" -eq 0 ] && ws_die "nothing to sync"
 
   ws_info "syncing ${#paths[@]} repo(s) with ${JOBS} parallel jobs${filter:+ (blobless)}"
-  git submodule update --init --jobs "$JOBS" "${filter[@]+"${filter[@]}"}" -- "${paths[@]}"
+  ws_git submodule update --init --jobs "$JOBS" "${filter[@]+"${filter[@]}"}" -- "${paths[@]}"
 }
 
 # --- pull --------------------------------------------------------------------
@@ -171,7 +205,7 @@ cmd_pull() {
       continue
     fi
 
-    if ! git -C "$dir" pull --ff-only --quiet; then
+    if ! ws_git -C "$dir" pull --ff-only --quiet; then
       FAILED+=("$short")
       continue
     fi
@@ -215,9 +249,23 @@ cmd_foreach() {
   [ "${#repos[@]}" -eq 0 ] && ws_die "no populated repositories selected"
 
   if [ "$parallel_mode" -eq 1 ] && command -v parallel >/dev/null 2>&1; then
-    printf '%s\n' "${repos[@]}" \
+    local paths=() full
+    for full in "${repos[@]}"; do paths+=("$(ws_path "$full")"); done
+    # {} is repos/<org>/<name> and {/} its last segment, so the namespace comes along
+    # without parallel having to be told about it. WS_REPO_SHORT is computed here rather
+    # than passed: it is the full name with the prefix stripped, and `basename` — which
+    # is what stood here — returned the full name instead, so every parallel run reported
+    # the wrong value for it.
+    export REPO_PREFIX
+    printf '%s\n' "${paths[@]}" \
       | parallel --group --jobs "$JOBS" --halt never \
-        "printf '%s=== %s%s\\n' '$C_BLD' {} '$C_OFF'; cd $WS_ROOT/repos/{} && WS_REPO={} WS_REPO_SHORT=\$(basename {}) WS_REPO_DIR=$WS_ROOT/repos/{} bash -c $(printf '%q' "$command")"
+        "cd '$WS_ROOT'/{} || exit 1
+         WS_REPO={/}
+         WS_REPO_SHORT=\${WS_REPO#\$REPO_PREFIX}
+         printf '%s=== %s%s\\n' '$C_BLD' \"\$WS_REPO_SHORT\" '$C_OFF'
+         export WS_REPO WS_REPO_SHORT
+         export WS_REPO_DIR='$WS_ROOT'/{}
+         bash -c $(printf '%q' "$command")"
     return $?
   fi
 
@@ -290,7 +338,7 @@ cmd_branch() {
 
     # Branch off the freshly pulled tracked branch, never off whatever happened to be
     # checked out — CLAUDE.md's rule, enforced here so it cannot be forgotten at scale.
-    if ! git -C "$dir" checkout --quiet "$base" || ! git -C "$dir" pull --ff-only --quiet; then
+    if ! git -C "$dir" checkout --quiet "$base" || ! ws_git -C "$dir" pull --ff-only --quiet; then
       FAILED+=("$short")
       printf '%scould not update %s%s\n' "$C_RED" "$base" "$C_OFF"
       continue
@@ -366,7 +414,7 @@ cmd_push() {
       continue
     fi
     ws_banner "$short"
-    git -C "$dir" push --set-upstream origin "$branch" || FAILED+=("$short")
+    ws_git -C "$dir" push --set-upstream origin "$branch" || FAILED+=("$short")
   done < <(ws_select_populated "$@")
   ws_report_failures
 }
@@ -383,12 +431,14 @@ cmd_pr() {
   shift 2 2>/dev/null || shift "$#"
   [ -n "$title" ] || ws_die "usage: ws.sh pr '<title>' '<body>' [repo...]"
 
-  local full short dir branch base
+  local full short dir branch base org nwo
   while IFS= read -r full; do
     short="$(ws_short_name "$full")"
     dir="$(ws_path "$full")"
     branch="$(git -C "$dir" rev-parse --abbrev-ref HEAD 2>/dev/null)"
     base="$(ws_tracked_branch "$full")"
+    org="$(ws_org_of "$full")"
+    nwo="$org/$full"
 
     if [ "$branch" = "$base" ] || [ "$branch" = "HEAD" ]; then
       printf '%s%-40s skipped: on %s%s\n' "$C_DIM" "$short" "$branch" "$C_OFF"
@@ -400,13 +450,13 @@ cmd_pr() {
     fi
     # An existing PR is reported, not duplicated — reruns of a bulk operation are
     # normal and must be idempotent.
-    if gh pr view --repo "$ORG/$full" "$branch" >/dev/null 2>&1; then
+    if ws_gh "$org" pr view --repo "$nwo" "$branch" >/dev/null 2>&1; then
       printf '%s%-40s PR exists: %s%s\n' "$C_DIM" "$short" \
-        "$(gh pr view --repo "$ORG/$full" "$branch" --json url --jq .url)" "$C_OFF"
+        "$(ws_gh "$org" pr view --repo "$nwo" "$branch" --json url --jq .url)" "$C_OFF"
       continue
     fi
     ws_banner "$short"
-    gh pr create --repo "$ORG/$full" --base "$base" --head "$branch" \
+    ws_gh "$org" pr create --repo "$nwo" --base "$base" --head "$branch" \
       --title "$title" --body "$body" || FAILED+=("$short")
   done < <(ws_select_populated "$@")
   ws_report_failures
@@ -443,55 +493,78 @@ cmd_add() {
   local apply=0
   [ "${1:-}" = "--apply" ] && apply=1
 
-  ws_info "querying GitHub for $REPO_PREFIX* repositories in $ORG..."
-  local discovered
-  discovered="$(ws_discover)" || exit 1
-  [ -n "$discovered" ] || ws_die "discovery returned nothing — refusing to act on an empty result"
+  ws_info "querying GitHub for $REPO_PREFIX* repositories in ${#WS_ORGS[@]} namespace(s): ${WS_ORGS[*]} ..."
 
-  local registered
-  registered="$(ws_registered)"
+  # One query, three questions asked of the same answer. The coverage check needs the
+  # unfiltered rows — a registered repository that has since been archived is still one
+  # the credential has to be able to see — so filtering happens after it, not in the
+  # query.
+  local all discovered
+  all="$(ws_discover_all)" || exit 1
+  ws_assert_discovery_covers_registers "$all"
+  discovered="$(printf '%s\n' "$all" | ws_filter_submodule_candidates)"
+  [ -n "$discovered" ] || ws_die "no repository qualifies as a submodule — refusing to act on an empty result"
 
-  local new=() gone=() full branch line
-  while IFS=$'\t' read -r full branch; do
+  local registered_paths
+  registered_paths="$(ws_registered_paths)"
+
+  local new=() gone=() org full branch path line
+  while IFS=$'\t' read -r org full branch; do
     [ -n "$full" ] || continue
-    printf '%s\n' "$registered" | grep -qxF "$full" || new+=("$full	$branch")
+    printf '%s\n' "$registered_paths" | grep -qxF "repos/$org/$full" || new+=("$org	$full	$branch")
   done <<<"$discovered"
 
   while IFS= read -r line; do
     [ -n "$line" ] || continue
-    printf '%s\n' "$discovered" | cut -f1 | grep -qxF "$line" || gone+=("$line")
-  done <<<"$registered"
+    printf '%s\n' "$discovered" | cut -f1,2 | tr '\t' '/' | grep -qxF "${line#repos/}" || gone+=("$line")
+  done <<<"$registered_paths"
 
   if [ "${#gone[@]}" -gt 0 ]; then
-    printf '%s%d registered repo(s) no longer qualify (archived, private, renamed or deleted):%s\n' \
+    printf '%s%d registered repo(s) no longer qualify (archived, excluded, renamed or deleted):%s\n' \
       "$C_YEL" "${#gone[@]}" "$C_OFF"
     printf '  %s\n' "${gone[@]}"
-    printf '  Remove manually: git rm repos/<name> && git config --file .gitmodules --remove-section submodule.repos/<name>\n'
+    printf '  Remove manually: git rm <path> && git config --file .gitmodules --remove-section submodule.<path>\n'
+  fi
+
+  # An exclusion that matches nothing is a row about a repository that has been renamed or
+  # deleted since someone declared it out of scope. Harmless, but it is the file's whole
+  # purpose to be read, and a stale row makes the next reader doubt the rest of it.
+  local stale=() xorg xname
+  while IFS=$'\t' read -r xorg xname _; do
+    [ -n "$xname" ] || continue
+    printf '%s\n' "${WS_ORGS[@]}" | grep -qxF "$xorg" || continue
+    printf '%s\n' "$all" | cut -f1,2 | grep -qxF "$xorg	$xname" || stale+=("$xorg/$xname")
+  done < <(ws_exclude_rows)
+  if [ "${#stale[@]}" -gt 0 ]; then
+    ws_warn "$(basename "$WS_EXCLUDE") names ${#stale[@]} repo(s) that no longer exist: ${stale[*]}"
   fi
 
   if [ "${#new[@]}" -eq 0 ]; then
-    ws_info "register is up to date: $(printf '%s\n' "$registered" | grep -c .) repositories"
+    ws_info "register is up to date: $(printf '%s\n' "$registered_paths" | grep -c .) repositories"
     return 0
   fi
 
   printf '%s%d repo(s) on GitHub are not registered:%s\n' "$C_BLD" "${#new[@]}" "$C_OFF"
-  printf '%s\n' "${new[@]}" | cut -f1 | sed 's/^/  /'
+  printf '%s\n' "${new[@]}" | awk -F'\t' '{print "  " $1 "/" $2}'
+  printf '  Not wanted here? Declare it in %s with a reason instead.\n' "${WS_EXCLUDE#"$WS_ROOT"/}"
 
   if [ "$apply" -eq 0 ]; then
     ws_info "re-run with --apply to register them"
     return 0
   fi
 
-  local sha url path
-  while IFS=$'\t' read -r full branch; do
+  local sha url
+  while IFS=$'\t' read -r org full branch; do
     [ -n "$full" ] || continue
-    url="$(ws_url "$full")"
-    path="$(ws_path "$full")"
-    # ls-remote is a single ref-advertisement round trip: it gives the tip commit
-    # without transferring a single object.
-    sha="$(git ls-remote "$url" "refs/heads/$branch" | cut -f1)"
+    url="$(ws_url "$full" "$org")"
+    path="$(ws_path "$full" "$org")"
+    # ls-remote is a single ref-advertisement round trip: it gives the tip commit without
+    # transferring a single object. It goes out over HTTPS, so the namespace's token has
+    # to be reachable to git as well as to gh — which is what the credential helper
+    # installed by `ws.sh credentials --install` is for.
+    sha="$(ws_git ls-remote "$url" "refs/heads/$branch" | cut -f1)"
     if [ -z "$sha" ]; then
-      ws_warn "could not resolve $branch of $full — skipped"
+      ws_warn "could not resolve $branch of $org/$full — skipped ($(ws_credential_hint "$org"))"
       FAILED+=("$(ws_short_name "$full")")
       continue
     fi
@@ -502,12 +575,53 @@ cmd_add() {
     # mode 160000 is a gitlink: the index entry that makes this path a submodule. Writing
     # it directly is what lets registration stay clone-free.
     git update-index --add --cacheinfo "160000,$sha,$path"
-    printf '  registered %-40s %s @ %s\n' "$(ws_short_name "$full")" "$branch" "${sha:0:8}"
+    printf '  registered %-26s %-40s %s @ %s\n' "$org" "$(ws_short_name "$full")" "$branch" "${sha:0:8}"
   done < <(printf '%s\n' "${new[@]}")
 
   git add .gitmodules
   ws_info "staged. Populate with ./scripts/ws.sh sync, commit with: git commit -m 'feat(repos): register new repositories'"
   ws_report_failures
+}
+
+# --- credentials --------------------------------------------------------------
+# What token each namespace resolves to, and where git will look for it. Prints no token
+# and no prefix of one: the point is to answer "why does this namespace come back empty",
+# and that question is answered by the *source*, never by the value.
+cmd_credentials() {
+  local install=0
+  [ "${1:-}" = "--install" ] && install=1
+
+  local helper="$WS_ROOT/scripts/git-credential-ws.sh"
+
+  if [ "$install" -eq 1 ]; then
+    [ -x "$helper" ] || ws_die "not executable: $helper"
+    # The empty credential.helper resets the list git has accumulated from the system and
+    # global files before this point — without it, the helper VS Code installs globally is
+    # consulted first and answers for both namespaces with one token.
+    git config --local --unset-all credential.helper 2>/dev/null
+    git config --local credential.helper ''
+    git config --local credential.https://github.com.useHttpPath true
+    git config --local --unset-all credential.https://github.com.helper 2>/dev/null
+    git config --local credential.https://github.com.helper "$helper"
+    ws_info "installed the per-namespace credential helper in .git/config (not committed)"
+  fi
+
+  local configured
+  configured="$(git config --local --get credential.https://github.com.helper 2>/dev/null)"
+
+  printf '%s%-28s %-14s %s%s\n' "$C_BLD" "NAMESPACE" "NEEDS A TOKEN" "RESOLVES FROM" "$C_OFF"
+  local org needs
+  for org in "${WS_ORGS[@]}"; do
+    if ws_org_needs_token "$org"; then needs="yes"; else needs="no"; fi
+    printf '%-28s %-14s %s\n' "$org" "$needs" "$(ws_token_source "$org")"
+  done
+
+  printf '\ntoken directory: %s\n' "$WS_TOKEN_DIR"
+  if [ "$configured" = "$helper" ]; then
+    printf 'git helper:      installed\n'
+  else
+    printf 'git helper:      %snot installed%s — run ./scripts/ws.sh credentials --install\n' "$C_YEL" "$C_OFF"
+  fi
 }
 
 # --- help --------------------------------------------------------------------
@@ -521,10 +635,17 @@ Repositories are named by their short name (php-sdk) or full name
 (rtldev-middleware-php-sdk). With no repo arguments, a command applies to all
 registered repositories.
 
+The repositories span two GitHub namespaces and live under repos/<namespace>/,
+but you never type the namespace: it is recorded per submodule in .gitmodules and
+looked up. Each namespace has its own token — see `credentials`.
+
 Reading
   status [repo...]              State, branch, dirtiness and upstream distance
   grep <pattern> [rg opts] [-- repo...]
                                 ripgrep across the populated checkouts
+  credentials [--install]       Which token each namespace resolves to, and where
+                                from. --install writes the per-namespace git
+                                credential helper into .git/config.
 
 Checkouts
   sync [--full] [repo...]       Populate/restore at the pinned commit (blobless
@@ -548,6 +669,10 @@ Changes
 Environment
   WS_JOBS=8                     Parallelism for sync and foreach -j
   NO_COLOR=1                    Plain output
+  WS_TOKEN_<NAMESPACE>          That namespace's GitHub token, uppercased with
+                                non-alphanumerics as _ (WS_TOKEN_CENTRALNICGROUP)
+  WS_TOKEN_DIR                  Where per-namespace token files are looked for
+  WS_NO_CREDENTIAL_HELPER=1     Leave git's own credential configuration alone
 
 A typical cross-repository change:
   ./scripts/ws.sh sync
@@ -578,6 +703,7 @@ main() {
     pr) cmd_pr "$@" ;;
     pin) cmd_pin "$@" ;;
     add) cmd_add "$@" ;;
+    credentials | creds) cmd_credentials "$@" ;;
     help | -h | --help) cmd_help ;;
     *)
       printf 'unknown command: %s\n\n' "$cmd" >&2
