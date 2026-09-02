@@ -47,6 +47,7 @@
     "repo:settings:apply": "bash scripts/org-settings.sh --apply",
     "repo:settings:resolve": "bash scripts/org-settings.sh --resolve",
     "node:policy": "bash scripts/node-policy.sh",
+    "deploykey:policy": "bash scripts/deploykey-policy.sh",
     "ws": "bash scripts/ws.sh",
     "ws:status": "bash scripts/ws.sh status",
     "ws:sync": "bash scripts/ws.sh sync",
