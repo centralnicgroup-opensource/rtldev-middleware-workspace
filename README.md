@@ -34,17 +34,68 @@ cd rtldev-middleware-workspace
 
 ## The repositories
 
-Fifteen public, non-archived `rtldev-middleware-*` repositories. The register lives in
-[.gitmodules](.gitmodules) and is reconciled against GitHub by `./scripts/ws.sh add` —
-run weekly by [repos-drift.yml](.github/workflows/repos-drift.yml), which fails when a
-new repository exists that nobody has registered here.
+Every non-archived `rtldev-middleware-*` repository, whatever its visibility, across both
+GitHub namespaces — except the ones
+[repos-exclude.tsv](.github/repos-exclude.tsv) declares out of scope with a reason. The
+register lives in [.gitmodules](.gitmodules) and is reconciled against GitHub by
+`./scripts/ws.sh add` — run weekly by
+[repos-drift.yml](.github/workflows/repos-drift.yml), which fails when a repository exists
+in either namespace and is in neither register.
 
-Directories under `repos/` keep the **full** repository name. That looks redundant, and
-it is load-bearing: opening `repos/rtldev-middleware-php-sdk` as its own devcontainer
-resolves `${localWorkspaceFolderBasename}` to the directory name, so a shortened
-directory would give that container a different name and workspace path than the same
-repository cloned on its own. Everywhere you _type_ a repository, the short name works:
-`./scripts/ws.sh status php-sdk`.
+Checkouts live at `repos/<namespace>/<full-repository-name>`:
+
+```
+repos/centralnicgroup-opensource/rtldev-middleware-php-sdk
+repos/centralnicgroup/rtldev-middleware-whmcs-src
+```
+
+Both halves of that path are load-bearing. The **namespace** is there because a repository
+is identified by its organisation and its name together, and the two organisations are
+permanent — consolidating them would mean lowering the base permission of
+`centralnicgroup-opensource` from Read to No permission, which will not be done, so the
+migration was cancelled. The **full** repository name is there because opening
+`repos/<namespace>/rtldev-middleware-php-sdk` as its own devcontainer resolves
+`${localWorkspaceFolderBasename}` to the directory name, so a shortened directory would
+give that container a different name and workspace path than the same repository cloned on
+its own.
+
+You never type either. Repositories are addressed by short name and the namespace is
+looked up: `./scripts/ws.sh status php-sdk`.
+
+### Two namespaces, two tokens
+
+A fine-grained GitHub PAT has exactly one resource owner, and asked about any other
+organisation it returns an **empty list rather than an error**. A token without
+private-repository scope omits exactly the repositories that need one. Both read as "those
+repositories do not exist" — the same failure `repos-drift.yml` exists to catch, arriving
+through the credential layer instead of the register. So there is one token per namespace,
+and three things refuse to accept a short answer:
+
+- a missing credential for a namespace that needs one fails **before** the query;
+- an empty result for any single namespace is fatal, never "that namespace has none";
+- every repository either register names must appear in its namespace's result. This is
+  the credential self-test, and it is the only one worth having: what it can actually
+  catch is the private rows, because a public repository is visible to any authenticated
+  token whatever its resource owner. A self-test pointed at a public repository is a test
+  that cannot fail.
+
+```sh
+./scripts/ws.sh credentials             # where each namespace's token comes from
+./scripts/ws.sh credentials --install   # teach git to pick the token by URL path
+```
+
+Tokens are read from `$WS_TOKEN_<NAMESPACE>` in the environment, or from a file named
+after the namespace in `~/.config/rtldev-middleware-workspace/tokens/`, which the
+devcontainer mounts **read-only** from the host. Nothing is ever committed, and
+`ws.sh credentials` prints where a token came from but never the token.
+
+`.gitmodules` stays uniformly HTTPS, so git itself has to choose between the two tokens on
+every fetch and push. `credential.<url>` config cannot express that — a path in the
+pattern must match _exactly_, so scoping by namespace that way would mean one section per
+repository — so [git-credential-ws.sh](scripts/git-credential-ws.sh) reads the URL path
+and answers for the whole namespace. `ws.sh` puts it in force for its own network calls
+whether or not you have run `--install`; `--install` is for the git commands you type
+yourself.
 
 ## A cross-repository change, start to finish
 
@@ -128,24 +179,32 @@ download of repositories the session may never touch.
 | Path                                | Purpose                                                              |
 | ----------------------------------- | -------------------------------------------------------------------- |
 | `scripts/ws.sh`                     | The workspace CLI — every bulk operation                             |
-| `scripts/repos.sh`                  | Shared library: naming, the register, GitHub discovery               |
+| `scripts/repos.sh`                  | Shared library: naming, the registers, credentials, discovery        |
+| `scripts/git-credential-ws.sh`      | git credential helper: picks the token by namespace                  |
+| `.github/repos-exclude.tsv`         | Repositories deliberately not registered here, each with a reason    |
 | `scripts/org-settings.sh`           | Reconciles GitHub settings for _every_ `rtldev-middleware-*` repo    |
 | `scripts/repo-settings.sh`          | The single-repository settings engine `org-settings.sh` drives       |
 | `.github/repo-settings/`            | The settings themselves: baseline, profiles, per-repo overrides      |
 | `scripts/node-policy.sh`            | Reports repositories whose Node/npm/pnpm declaration has drifted     |
 | `.github/node-policy.conf`          | The one Node toolchain every repository is meant to declare          |
 | `scripts/deploykey-policy.sh`       | Reports repositories whose deploy-key release trait is wrong         |
-| `repos/`                            | The submodule checkouts. Nothing in here is edited from here         |
+| `repos/<namespace>/`                | The submodule checkouts. Nothing in here is edited from here         |
 | `.github/workflows/quality.yml`     | Prettier, actionlint, shellcheck, and the register consistency check |
 | `.github/workflows/repos-drift.yml` | Weekly: has a new repository appeared that is not registered?        |
 
 ### Repository settings
 
-GitHub settings are managed here for the whole organisation, not repository by
-repository. `.github/repo-settings/` holds one baseline, two audience profiles
-(`customer-facing` — issues on; `internal` — issues off) and a per-repository override
-file where a repository genuinely differs. `_register.tsv` lists which repository takes
-which profile.
+GitHub settings are managed here for both organisations, not repository by repository.
+`.github/repo-settings/` holds one baseline, two audience profiles (`customer-facing` —
+issues on; `internal` — issues off) and a per-repository override file where a repository
+genuinely differs. `_register.tsv` lists which namespace each repository is in and which
+profile it takes, and each repository is reconciled with its own namespace's token, set
+for that one engine invocation.
+
+That namespace column is not decoration. While a single organisation was hardcoded, a row
+for the other one resolved to a repository that does not exist — which is why
+`rtldev-middleware-whmcs-src`, whose deploy-key ruleset bypass this register is the only
+record of, could not be registered here at all.
 
 ```sh
 pnpm repo:settings                  # report drift everywhere, change nothing
@@ -167,7 +226,28 @@ job.
 
 Archived repositories are out of scope — see "Retiring a repository" below. The coverage
 question is asked of the active repositories only, so an archived one is neither required
-in `_register.tsv` nor a failure when absent from it.
+in `_register.tsv` nor a failure when absent from it. Anything named in
+`repos-exclude.tsv` is out too: a repository declared not to be part of this workspace at
+all is not a settings gap, and recording that decision in two files would mean the drift
+job stayed red until both had it.
+
+Three settings cannot be satisfied on a private or internal repository:
+`SECRET_SCANNING` and `SECRET_SCANNING_PUSH_PROTECTION` need GitHub Advanced Security
+there, and `PRIVATE_VULNERABILITY_REPORTING` is public-only whatever the plan. The engine
+reports those as **unavailable** and counts them with the fields it could not read, never
+as drift. That is a decision, not an accident of the API: reported as drift they would be
+three permanent lines on every private repository for ever, and a drift report with
+permanent entries is one nobody reads.
+
+One more thing the engine now does by construction rather than by luck: it resolves
+rulesets with `includes_parents=false`. That parameter defaults to _true_, so the listing
+otherwise includes the organisation's own rulesets — and `centralnicgroup` sets one,
+inherited by every repository in it. Had an organisation ruleset ever been named
+`default-branch-protection`, the obvious name and the one this baseline uses, an apply
+would have 404'd while never creating the repository-level ruleset, and a check would have
+read the organisation ruleset's empty bypass list and reported a repository with no
+protection of its own as present and clean. Inherited rulesets are printed as context,
+because their rules are enforced as the union with ours, but they are not ours to manage.
 
 ### Retiring a repository
 
@@ -233,9 +313,17 @@ than `repos/`, because `whmcs` and `dnscontrol` are usually not checked out — 
 reading working trees would skip `whmcs`, the one repository the key signal exists for.
 
 It also checks every name in `_register.tsv`, including one the organisation listing did
-not return, and fails on it rather than passing quietly. That is what makes it useful
-against a repository in another namespace: a register row lands before the token that can
-read it does, and the row must not certify itself in the meantime.
+not return, and fails on it rather than passing quietly. That is deliberately different
+from `org-settings.sh`, which now aborts on the same condition: here the row has to be
+_checked and fail_, one repository at a time, because a register row can land before the
+token that can read it does and must not certify itself in the meantime — and the report
+on every other repository is worth having while that is true.
+
+It reads **both** namespaces, unlike its sibling `node-policy.sh`. It has to: the
+repository whose bypass this policy exists to protect, `whmcs-src`, is private and in
+`centralnicgroup`. Listing deploy keys is `administration:read`, the scope none of the
+other drift jobs needs and the one most likely to go missing after a rotation — so a
+uniformly red run is the credential, not drift.
 
 Read-only, with no write mode at all. The fix is a register row in a pull request here or
 a deploy key removed over there, and which of the two it is takes a person deciding.
@@ -286,6 +374,14 @@ above. It enumerates from the organisation and checks everything with a `package
 a new repository is covered the moment it exists; one without a `package.json` is reported
 and counted rather than skipped in silence. The script is read-only and has no write mode
 — a manifest edit belongs in that repository's own history and review.
+
+It is scoped to `centralnicgroup-opensource` alone, and that is the one thing here still
+waiting. Because coverage needs no register, widening it adds every `centralnicgroup`
+manifest at once — none of which has ever been compared against `node-policy.conf` — and
+with literal string comparison each of them is drift until a commit lands in that
+repository. A weekly job that is red for something this repository cannot fix is a job
+nobody reads, so RSRMID-3036 widens the script and the workflow together, after finding
+out what the drift actually is.
 
 CI never checks out the submodules. Their code is gated by their own CI; re-linting it
 here would duplicate that and fail on findings this repository cannot fix. For the same
