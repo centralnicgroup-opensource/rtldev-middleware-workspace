@@ -20,7 +20,7 @@
 
 # --- namespaces --------------------------------------------------------------
 # The namespaces this workspace spans, in the order reports list them.
-WS_ORGS=("centralnicgroup-opensource")
+WS_ORGS=("centralnicgroup-opensource" "centralnicgroup")
 
 # Whether reaching a namespace needs a credential of its own.
 #
@@ -257,7 +257,13 @@ ws_git() {
         git "$@"
         return $?
     fi
-    GIT_CONFIG_COUNT=3 \
+    # GIT_TERMINAL_PROMPT=0 so a namespace with no usable credential fails immediately
+    # with a named error instead of stopping on a username prompt. That matters here more
+    # than it would anywhere else: these commands run in a loop over every registered
+    # repository, and one prompt part-way through a nineteen-repository sync blocks the
+    # whole run on a question nobody is watching for.
+    GIT_TERMINAL_PROMPT=0 \
+        GIT_CONFIG_COUNT=3 \
         GIT_CONFIG_KEY_0=credential.helper GIT_CONFIG_VALUE_0='' \
         GIT_CONFIG_KEY_1=credential.https://github.com.useHttpPath GIT_CONFIG_VALUE_1=true \
         GIT_CONFIG_KEY_2=credential.https://github.com.helper \
