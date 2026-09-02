@@ -46,6 +46,14 @@ die() {
 # accounts for every setting, but counted as neither drift nor a read failure.
 unmanaged() { info "- ${1}: unmanaged here"; }
 
+# A setting this repository's visibility does not offer at all. Counted with the fields
+# the token cannot read, because it is the same kind of thing — a value with no reading —
+# and emphatically not drift, which would mean an apply could fix it.
+unavailable() {
+    info "? ${1}: ${2} — not available here, skipped"
+    SKIPPED=$((SKIPPED + 1))
+}
+
 # Reports one field. In check mode it records drift; in apply mode the caller has
 # already written the value, so this is just the log line.
 #
@@ -262,27 +270,64 @@ toggle() { # path desired
         info "  (could not $method $path — needs admin, or the plan does not offer it)"
 }
 
+# Three of the settings below are not offered at every visibility, and a value that is not
+# on offer is not drift: it is a field with no reading, which is what the "unreadable"
+# bucket already exists for. Reported as drift instead, they would be three lines on every
+# run of every private repository for ever — and a drift report with permanent entries is
+# a drift report nobody reads, which costs far more than the three lines are worth.
+#
+# The earlier graceful path did not cover this. It reported "unknown" only when
+# .security_and_analysis was absent from the response altogether, which is what a
+# low-scope token produces; on a private repository the object is present with
+# status: disabled, so all three compared as ordinary drift.
+#
+# Visibility, not the plan, is the condition — deliberately. Secret scanning needs GitHub
+# Advanced Security on a non-public repository, so the two are checked together: at public
+# visibility it is free and any disagreement is genuine drift.
+visibility=$(jq -r '.visibility // "public"' <<<"$actual")
+advanced_security=$(jq -r '.security_and_analysis.advanced_security.status // "unknown"' <<<"$actual")
+
+secret_scanning_available=true
+[[ "$visibility" != "public" && "$advanced_security" != "enabled" ]] && secret_scanning_available=false
+
+# Private vulnerability reporting is public-only whatever the plan: the endpoint 404s on a
+# non-public repository, so no amount of licensing makes it satisfiable there.
+pvr_available=true
+[[ "$visibility" != "public" ]] && pvr_available=false
+
 if [[ "$MODE" == "apply" ]]; then
     toggle "repos/${REPO}/vulnerability-alerts" "$VULNERABILITY_ALERTS"
     toggle "repos/${REPO}/automated-security-fixes" "$AUTOMATED_SECURITY_FIXES"
-    toggle "repos/${REPO}/private-vulnerability-reporting" "$PRIVATE_VULNERABILITY_REPORTING"
+    [[ "$pvr_available" == true ]] &&
+        toggle "repos/${REPO}/private-vulnerability-reporting" "$PRIVATE_VULNERABILITY_REPORTING"
 
     # Secret scanning rides along on the repo PATCH rather than its own endpoint, and
     # is rejected outright on plans without it — hence the tolerated failure.
-    jq -n \
-        --arg ss "$([[ "$SECRET_SCANNING" == true ]] && echo enabled || echo disabled)" \
-        --arg pp "$([[ "$SECRET_SCANNING_PUSH_PROTECTION" == true ]] && echo enabled || echo disabled)" \
-        '{security_and_analysis: {secret_scanning: {status: $ss}, secret_scanning_push_protection: {status: $pp}}}' |
-        gh api --method PATCH "repos/${REPO}" --input - >/dev/null 2>&1 ||
-        info "  (secret scanning not settable here — plan or permissions)"
+    if [[ "$secret_scanning_available" == true ]]; then
+        jq -n \
+            --arg ss "$([[ "$SECRET_SCANNING" == true ]] && echo enabled || echo disabled)" \
+            --arg pp "$([[ "$SECRET_SCANNING_PUSH_PROTECTION" == true ]] && echo enabled || echo disabled)" \
+            '{security_and_analysis: {secret_scanning: {status: $ss}, secret_scanning_push_protection: {status: $pp}}}' |
+            gh api --method PATCH "repos/${REPO}" --input - >/dev/null 2>&1 ||
+            info "  (secret scanning not settable here — plan or permissions)"
+    fi
 fi
 
 compare "vulnerability alerts" "$VULNERABILITY_ALERTS" "$(probe_204 "repos/${REPO}/vulnerability-alerts")"
 compare "automated security fixes" "$AUTOMATED_SECURITY_FIXES" "$(probe_enabled_json "repos/${REPO}/automated-security-fixes")"
-compare "private vulnerability reporting" "$PRIVATE_VULNERABILITY_REPORTING" "$(probe_enabled_json "repos/${REPO}/private-vulnerability-reporting")"
+
+if [[ "$pvr_available" != true ]]; then
+    unavailable "private vulnerability reporting" "a public-only feature, and this repository is ${visibility}"
+else
+    compare "private vulnerability reporting" "$PRIVATE_VULNERABILITY_REPORTING" \
+        "$(probe_enabled_json "repos/${REPO}/private-vulnerability-reporting")"
+fi
 
 sa=$(gh api "repos/${REPO}" --jq '.security_and_analysis // empty' 2>/dev/null || true)
-if [[ -n "$sa" ]]; then
+if [[ "$secret_scanning_available" != true ]]; then
+    unavailable "secret scanning" "needs GitHub Advanced Security on a ${visibility} repository"
+    unavailable "secret scanning push protection" "needs GitHub Advanced Security on a ${visibility} repository"
+elif [[ -n "$sa" ]]; then
     compare "secret scanning" "$([[ "$SECRET_SCANNING" == true ]] && echo enabled || echo disabled)" \
         "$(jq -r '.secret_scanning.status // "unknown"' <<<"$sa")"
     compare "secret scanning push protection" \
@@ -385,9 +430,38 @@ else
       )
     }')
 
+    # includes_parents=false is load-bearing, not tidiness. The parameter defaults to
+    # *true*, so without it this listing includes the organisation's own rulesets, which
+    # an organisation may well name `default-branch-protection` — the obvious name, and
+    # the one this baseline uses. `existing` would then resolve to a ruleset id this
+    # repository does not own: in apply mode the PUT 404s and the repository-level ruleset
+    # is never created, and in check mode the bypass comparison reads the organisation
+    # ruleset's empty bypass_actors, so a repository with no ruleset of its own reports as
+    # present and clean. Both are silent wrongness of exactly the kind this script exists
+    # to remove.
+    #
+    # It went unnoticed because centralnicgroup-opensource sets no organisation rulesets
+    # at all, so every repository this engine had ever run against returned one entry.
+    # centralnicgroup does set one, and it is inherited by every repository there.
+    #
     # Filtered with jq rather than `gh api --jq`, which takes no --arg.
-    existing=$(gh api "repos/${REPO}/rulesets" 2>/dev/null |
+    existing=$(gh api "repos/${REPO}/rulesets?includes_parents=false" 2>/dev/null |
         jq -r --arg n "$RULESET_NAME" 'map(select(.name == $n)) | .[0].id // empty' 2>/dev/null || echo "")
+
+    # Inherited organisation rulesets, reported as context and never as drift. They are
+    # outside this workspace's authority — DELETE against a repository path 404s for one,
+    # and the CI token cannot read orgs/{org}/rulesets at all — and the baseline already
+    # records why repository-level rulesets were chosen over an organisation one. Worth
+    # printing because the rules they add are enforced as the union with ours, so someone
+    # reading this output needs to know they exist.
+    inherited=$(gh api "repos/${REPO}/rulesets" 2>/dev/null |
+        jq -r 'map(select(.source_type != "Repository"))
+               | .[] | "\(.name) (from \(.source))"' 2>/dev/null || echo "")
+    if [[ -n "$inherited" ]]; then
+        while IFS= read -r line; do
+            [[ -n "$line" ]] && info "- inherited organisation ruleset, not managed here: ${line}"
+        done <<<"$inherited"
+    fi
 
     if [[ "$MODE" == "apply" ]]; then
         if [[ -n "$existing" ]]; then
