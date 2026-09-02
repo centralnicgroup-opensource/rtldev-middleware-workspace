@@ -28,12 +28,26 @@
 # since been renamed or deleted stops being silently vouched for.
 
 # --- centralnicgroup ---------------------------------------------------------
-# Two of the four active rtldev-middleware-* repositories in that namespace; the other two
-# are registered. Archiving already takes a repository out of both registers, so an
-# archived one needs no row here — see the note on whmcs-core below for when one is worth
-# keeping anyway.
+# Three of the four active rtldev-middleware-* repositories in that namespace; whmcs-src is
+# the only one registered. Archiving already takes a repository out of both registers, so
+# an archived one needs no row here — see the note on whmcs-core below for when one is
+# worth keeping anyway.
+#
+# That this namespace turned out to be almost entirely exclusions is the review working,
+# not the review failing. The department's own tooling lives in
+# centralnicgroup-opensource; what is over here is one release source, plus other people's
+# software and material nobody develops.
 centralnicgroup	rtldev-middleware-playground-repo	sandbox, not a product
 centralnicgroup	rtldev-middleware-mcp-dis	third-party fork
+
+# onboarding holds onboarding and practice material, not code we ship or maintain.
+# Registered as `internal` at first and excluded on review, which is what the review was
+# for: applying the baseline would have required a reviewed pull request with an approval
+# to add a note to it, turned its issues, projects and wiki off, and left a standing drift
+# line until its classic branch protection was deleted by hand. That is friction with no
+# benefit on a repository nobody merges anything into, and our merge-button policy has
+# nothing to say about one.
+centralnicgroup	rtldev-middleware-onboarding	onboarding and practice material, not maintained code
 
 # whmcs-core is an unencrypted copy of WHMCS itself, kept for occasional analysis and for
 # teaching. Nothing is developed in it, so there is no bulk edit it could ever be the
