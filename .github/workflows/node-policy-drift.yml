@@ -53,5 +53,10 @@ jobs:
       # fails loudly on unreadable repositories rather than passing on an empty set.
       - name: Check every repository against .github/node-policy.conf
         env:
+          # One namespace only, matching what node-policy.sh reads. RSRMID-3036 widens
+          # both together, once the drift on the centralnicgroup manifests is known —
+          # widening the job alone would turn it red for something only commits in those
+          # repositories can fix.
+          WS_TOKEN_CENTRALNICGROUP_OPENSOURCE: ${{ secrets.RTLDEV_MW_CI_TOKEN }}
           GH_TOKEN: ${{ secrets.RTLDEV_MW_CI_TOKEN || secrets.GITHUB_TOKEN }}
         run: scripts/node-policy.sh --verbose
