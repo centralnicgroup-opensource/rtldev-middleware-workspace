@@ -182,8 +182,13 @@ file_content() {
 write_deploy_keys() {
   local out org
   org="$(repo_org "$1")"
+  # jq's stderr is discarded as well as gh's. A refused listing still puts its JSON error
+  # *object* on stdout, so jq then fails indexing it — correctly, and the sentinel below is
+  # the right answer, but the raw jq error alongside it reads like a fault in this script
+  # rather than the credential problem it is. On a token missing administration:read that
+  # is fifteen of them in one run.
   if [ -z "$org" ] || ! out="$(ws_gh "$org" api --paginate "repos/$(repo_nwo "$1")/keys" 2>/dev/null \
-    | jq -r '.[] | select(.read_only == false) | .title')"; then
+    | jq -r '.[] | select(.read_only == false) | .title' 2>/dev/null)"; then
     printf '%s' "$SENTINEL_UNREADABLE"
     return
   fi
@@ -436,9 +441,20 @@ fi
 
 ws_info "Checking ${#TARGETS[@]} repositories against the $TRAIT trait ..."
 
+# Not part of this workspace at all, by declaration in repos-exclude.tsv. The same
+# reasoning as the `exclude` profile below, and it has to be applied here as well as
+# there: this check enumerates the organisations rather than the register, so without it
+# a sandbox is judged against a rule that cannot apply to it. playground-repo is the case
+# — its .releaserc.json does list @semantic-release/git, so the cause signal fires, but
+# nothing here manages its settings, so there is no apply that could set bypass_actors to
+# [] and no bypass for it to lose. Reported as excluded rather than as drift nobody can
+# act on.
+is_out_of_scope() { ws_is_excluded "$(repo_org "$1")" "$1"; }
+
 ws_info "Reading root listings and distribution targets ..."
 for name in "${TARGETS[@]}"; do
   is_archived "$name" && continue
+  is_out_of_scope "$name" && continue
   collect "$name"
 done
 
@@ -451,6 +467,13 @@ for name in "${TARGETS[@]}"; do
   if is_archived "$name"; then
     SKIPPED_ARCHIVED=$((SKIPPED_ARCHIVED + 1))
     [ "$VERBOSE" -eq 1 ] && printf '%-46s archived\n' "$name"
+    continue
+  fi
+
+  if is_out_of_scope "$name"; then
+    SKIPPED_EXCLUDED=$((SKIPPED_EXCLUDED + 1))
+    [ "$VERBOSE" -eq 1 ] && printf '%-46s not part of this workspace (%s)\n' \
+      "$name" "$(basename "$WS_EXCLUDE")"
     continue
   fi
 
