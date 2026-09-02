@@ -427,10 +427,17 @@ is_archived() { printf '%s\n' "$ARCHIVED_NAMES" | grep -qxF "$1"; }
 
 if [ "${#SELECTED[@]}" -gt 0 ]; then
   TARGETS=("${SELECTED[@]}")
+  # A named argument only has to be a repository this workspace knows about — anything
+  # either organisation returned, whatever its archived state, or anything either register
+  # names. This is a typo guard and nothing more, so it must not reject a repository it can
+  # plainly see: an archived one, or one repos-exclude.tsv declares out of scope, is known
+  # and gets an honest "archived" or "not part of this workspace" line further down rather
+  # than a refusal to run. Checking only the *active* names made passing whmcs-core by name
+  # a hard error the moment it was archived.
   for name in "${TARGETS[@]}"; do
-    printf '%s\n' "$ACTIVE_NAMES" | grep -qxF "$name" && continue
+    printf '%s\n' "$DISCOVERED" | cut -f2 | grep -qxF "$name" && continue
     printf '%s\n' "$REGISTERED" | grep -qxF "$name" && continue
-    ws_die "neither active in ${WS_ORGS[*]} nor named in $(basename "$WS_REGISTER"): $name"
+    ws_die "not a repository this workspace knows about — not in ${WS_ORGS[*]}, and not named in $(basename "$WS_REGISTER"): $name"
   done
 else
   # The union, so that neither list can narrow the other's coverage: a repository absent

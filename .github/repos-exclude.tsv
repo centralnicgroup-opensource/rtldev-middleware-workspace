@@ -28,9 +28,10 @@
 # since been renamed or deleted stops being silently vouched for.
 
 # --- centralnicgroup ---------------------------------------------------------
-# Three of the five active rtldev-middleware-* repositories in that namespace. The other
-# two are registered; the two archived ones need no row here, because archiving already
-# takes a repository out of both registers.
+# Two of the four active rtldev-middleware-* repositories in that namespace; the other two
+# are registered. Archiving already takes a repository out of both registers, so an
+# archived one needs no row here — see the note on whmcs-core below for when one is worth
+# keeping anyway.
 centralnicgroup	rtldev-middleware-playground-repo	sandbox, not a product
 centralnicgroup	rtldev-middleware-mcp-dis	third-party fork
 
@@ -41,9 +42,16 @@ centralnicgroup	rtldev-middleware-mcp-dis	third-party fork
 # than registered as `internal`, which would have applied our merge-button and branch
 # policy to a repository nobody merges anything into.
 #
-# It is also the clearest example of what RSRMID-3022 was cancelled over. Consolidating
-# the namespaces needed the base permission of centralnicgroup-opensource lowered from
-# Read to No permission, because without that the transfer would have granted every
-# member of that organisation automatic read on exactly this — unencrypted commercial
-# source.
+# Archived on 2026-09-02, which is how a repository is made read-only: GitHub has no
+# separate flag for it. So this row is strictly redundant for the checks — they filter
+# archived repositories out before they ever consult this file. It is kept because it is
+# the only place the *reason* is written down, and because it survives an unarchive, which
+# is exactly the moment someone would need to read it.
+#
+# It stays `private` rather than being made `internal` first, against the letter of the
+# retirement rule in the README and deliberately: `internal` would let every member of the
+# organisation read it. That is also the clearest example of what RSRMID-3022 was
+# cancelled over — consolidating the namespaces needed the base permission of
+# centralnicgroup-opensource lowered from Read to No permission, because without it the
+# transfer would have granted precisely that access to unencrypted commercial source.
 centralnicgroup	rtldev-middleware-whmcs-core	unencrypted WHMCS itself, kept for analysis and teaching; third-party software, nothing developed here

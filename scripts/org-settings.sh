@@ -33,6 +33,20 @@ set -uo pipefail
 # shellcheck source=scripts/repos.sh
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/repos.sh"
 
+# "Not in the register" is the wrong thing to say about a repository that is in the
+# *other* register. There are two now, they answer different questions, and a person who
+# has just been told a name is unknown will go and add it to the one this script reads —
+# which is precisely the decision repos-exclude.tsv exists to have already made.
+no_such_row() {
+  local name="$1" org
+  for org in "${WS_ORGS[@]}"; do
+    if ws_is_excluded "$org" "$name"; then
+      ws_die "$org/$name is declared out of this workspace in $(basename "$WS_EXCLUDE") — it has no settings configuration here, and adding a row for it would undo that decision"
+    fi
+  done
+  ws_die "not in $(basename "$WS_REGISTER"): $name"
+}
+
 SETTINGS_DIR="$WS_ROOT/.github/repo-settings"
 REGISTER="$WS_REGISTER"
 ENGINE="$WS_ROOT/scripts/repo-settings.sh"
@@ -113,7 +127,7 @@ check_profiles() {
 if [ "$RESOLVE_ONLY" -eq 1 ]; then
   [ "${#SELECTED[@]}" -gt 0 ] || ws_die "--resolve needs a repository name"
   for name in "${SELECTED[@]}"; do
-    profile="$(ws_register_profile "$name")" || ws_die "not in the register: $name"
+    profile="$(ws_register_profile "$name")" || no_such_row "$name"
     if [ "$profile" = "exclude" ]; then
       ws_info "$name is excluded by the register — no configuration is resolved for it"
       continue
@@ -189,7 +203,7 @@ is_archived() {
 if [ "${#SELECTED[@]}" -gt 0 ]; then
   TARGETS=("${SELECTED[@]}")
   for name in "${TARGETS[@]}"; do
-    ws_register_profile "$name" >/dev/null || ws_die "not in the register: $name"
+    ws_register_profile "$name" >/dev/null || no_such_row "$name"
   done
 else
   mapfile -t TARGETS < <(ws_register_names)
