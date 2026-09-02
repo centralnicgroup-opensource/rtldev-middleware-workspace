@@ -263,6 +263,20 @@ When we stop maintaining an `rtldev-middleware-*` repository:
 archived repository, so an internal-bound one has to be made internal first and archived
 second. Doing it the other way round means unarchiving to fix it.
 
+**One class of repository is `private`, not `internal`, and must stay that way:** a
+repository holding third-party licensed source. `internal` means every member of the
+organisation can read it, and for `whmcs-core` — an unencrypted copy of WHMCS itself —
+that is exactly the exposure RSRMID-3022 was cancelled to prevent. The rule above is
+about our own retired code; do not apply its visibility step to somebody else's.
+
+**Archiving is also how a repository is made read-only.** GitHub has no separate
+read-only flag: archiving is the mechanism, it blocks pushes, issues and pull requests,
+it stays readable and cloneable, and it is reversible. Nothing here needs changing when a
+repository is archived — both registers filter archived repositories out already. A
+`repos-exclude.tsv` row for one is still worth keeping rather than deleting, because the
+row carries the _reason_, which archiving records nowhere, and because it survives an
+unarchive.
+
 Two repositories archived before this rule existed are `private` rather than `internal`
 (`app` and `whmcs-changelog-monitor`, both in `centralnicgroup`). Private is stricter than
 internal, not weaker, so there is nothing to repair — and repairing it would mean
