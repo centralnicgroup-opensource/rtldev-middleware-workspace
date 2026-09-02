@@ -71,21 +71,23 @@ centralnicgroup-opensource	rtldev-middleware-devcontainer-features	internal,rele
 centralnicgroup-opensource	rtldev-middleware-dnscontrol-dnsconfig	internal	test/demo config for the dnscontrol provider module
 centralnicgroup-opensource	rtldev-middleware-semantic-release-plugins	internal
 
-# The centralnicgroup namespace. Both repositories here are private, so three baseline
-# settings are unsatisfiable on each and the engine reports them as unavailable rather than
-# as drift — secret scanning and its push protection need GitHub Advanced Security at this
-# visibility, and private vulnerability reporting is public-only whatever the plan.
+# The centralnicgroup namespace. One row, because the review that widened the register to
+# this namespace ended up excluding everything else in it — see repos-exclude.tsv, and the
+# reasons there, which are the point of that file.
 #
-# Neither has a .github/ISSUE_TEMPLATE/, so HAS_ISSUES=false from the internal profile
-# leaves nothing behind. Checked, because the profile asks for the templates to be deleted
-# in the same change.
+# whmcs-src is private, so three baseline settings are unsatisfiable on it and the engine
+# reports them as unavailable rather than as drift: secret scanning and its push protection
+# need GitHub Advanced Security at this visibility, and private vulnerability reporting is
+# public-only whatever the plan.
 #
-# The first apply against these will be a real tightening rather than a no-op: both allow
-# merge commits, and onboarding additionally allows squash merges, does not delete the
-# branch on merge, and has projects and the wiki on. That is intended and is recorded here
-# so it is not read as an accident.
+# It has no .github/ISSUE_TEMPLATE/, so HAS_ISSUES=false from the internal profile leaves
+# nothing behind. Checked, because the profile asks for the templates to be deleted in the
+# same change.
+#
+# The first apply will be a real tightening rather than a no-op: HAS_ISSUES goes off and
+# allow_merge_commit goes false. Both are intended, and are recorded here so the apply is
+# not read as an accident.
 centralnicgroup	rtldev-middleware-whmcs-src	internal,releases-via-deploykey	unencrypted source of the CNR WHMCS bundle; two release identities, see its own .conf
-centralnicgroup	rtldev-middleware-onboarding	internal	middleware onboarding material
 
 # --- Excluded ----------------------------------------------------------------
 # A fork of StackExchange/dnscontrol. Its settings are not ours to hold an opinion
