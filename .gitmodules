@@ -62,10 +62,6 @@
 	path = repos/centralnicgroup/rtldev-middleware-onboarding
 	url = https://github.com/centralnicgroup/rtldev-middleware-onboarding.git
 	branch = main
-[submodule "repos/centralnicgroup/rtldev-middleware-whmcs-core"]
-	path = repos/centralnicgroup/rtldev-middleware-whmcs-core
-	url = https://github.com/centralnicgroup/rtldev-middleware-whmcs-core.git
-	branch = main
 [submodule "repos/centralnicgroup/rtldev-middleware-whmcs-src"]
 	path = repos/centralnicgroup/rtldev-middleware-whmcs-src
 	url = https://github.com/centralnicgroup/rtldev-middleware-whmcs-src.git

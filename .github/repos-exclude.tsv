@@ -28,8 +28,22 @@
 # since been renamed or deleted stops being silently vouched for.
 
 # --- centralnicgroup ---------------------------------------------------------
-# Two of the five active rtldev-middleware-* repositories in that namespace. The other
-# three are registered; the two archived ones need no row here, because archiving already
+# Three of the five active rtldev-middleware-* repositories in that namespace. The other
+# two are registered; the two archived ones need no row here, because archiving already
 # takes a repository out of both registers.
 centralnicgroup	rtldev-middleware-playground-repo	sandbox, not a product
 centralnicgroup	rtldev-middleware-mcp-dis	third-party fork
+
+# whmcs-core is an unencrypted copy of WHMCS itself, kept for occasional analysis and for
+# teaching. Nothing is developed in it, so there is no bulk edit it could ever be the
+# target of — and its settings are no more ours to hold an opinion about than
+# dnscontrol's are, for the same reason: the software is somebody else's. Excluded rather
+# than registered as `internal`, which would have applied our merge-button and branch
+# policy to a repository nobody merges anything into.
+#
+# It is also the clearest example of what RSRMID-3022 was cancelled over. Consolidating
+# the namespaces needed the base permission of centralnicgroup-opensource lowered from
+# Read to No permission, because without that the transfer would have granted every
+# member of that organisation automatic read on exactly this — unencrypted commercial
+# source.
+centralnicgroup	rtldev-middleware-whmcs-core	unencrypted WHMCS itself, kept for analysis and teaching; third-party software, nothing developed here
