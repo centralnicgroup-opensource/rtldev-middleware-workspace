@@ -175,9 +175,15 @@ ws_assert_credentials() {
 }
 
 # --- GitHub reads ------------------------------------------------------------
-# One page of the REST API, in the given namespace. gh is preferred when it is available
-# and a token was resolved; unauthenticated curl is the fallback, which is what lets the
-# workspace be set up against the public namespace before anyone runs `gh auth login`.
+# One page of the REST API, in the given namespace. gh is preferred where it exists;
+# unauthenticated curl is the last fallback, which is what lets the workspace be set up
+# against a public namespace before anyone runs `gh auth login`.
+#
+# A resolved token is never dropped on the way to that fallback. Falling back to an
+# unauthenticated request while holding a perfectly good token would return a shorter
+# list, not an error — the failure this whole layer exists to make impossible — so curl
+# gets the token too, through --config on stdin rather than an -H argument, which would
+# put it in the process list.
 ws_gh_api() {
     local org="$1" path="$2" token
     token="$(ws_token_for_org "$org")"
@@ -185,8 +191,14 @@ ws_gh_api() {
         ws_warn "no credential for $org — $(ws_credential_hint "$org")"
         return 1
     fi
-    if [ -n "$token" ] && command -v gh >/dev/null 2>&1; then
-        GH_TOKEN="$token" gh api "$path"
+    if [ -n "$token" ]; then
+        if command -v gh >/dev/null 2>&1; then
+            GH_TOKEN="$token" gh api "$path"
+        else
+            printf 'header = "Authorization: Bearer %s"\n' "$token" \
+                | curl -fsSL -H 'Accept: application/vnd.github+json' \
+                    --config - "https://api.github.com/$path"
+        fi
     elif command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then
         gh api "$path"
     else
