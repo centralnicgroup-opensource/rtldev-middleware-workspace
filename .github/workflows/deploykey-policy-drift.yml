@@ -1,0 +1,63 @@
+---
+# Reports when a repository's releases-via-deploykey trait in
+# .github/repo-settings/_register.tsv no longer matches what the repository actually does
+# — its semantic-release plugins array, or the write-enabled deploy key that lets the
+# release push past the ruleset.
+#
+# Nothing derived that trait from ground truth, so the register could be entirely
+# self-consistent and still wrong: the "internally consistent but incomplete" failure the
+# central settings model exists to prevent. RSRMID-3025 was six days of broken releases
+# from exactly that, and the sweep that caught it was done by hand. This is that sweep,
+# run weekly. (RSRMID-3035)
+#
+# Like the Node policy job, this one needs no register to be complete — it enumerates
+# from the organisation, so a repository nobody registered is checked from the moment it
+# exists. Unlike that one it *also* checks every name the register carries, including one
+# the organisation listing did not return: the source side of a distribution arrangement
+# can live in another namespace, and a register row this token cannot verify has to fail
+# rather than pass quietly.
+#
+# Read-only by construction — scripts/deploykey-policy.sh has no write mode at all. The
+# fix is either a register row in a pull request here or a deploy key removed over there,
+# and which of the two it is takes a person deciding.
+name: Deploy-key trait drift
+
+on:
+  schedule:
+    # Monday morning, behind the settings (06:00), register (06:30) and Node (07:00) jobs
+    # so four failures do not arrive as one indistinguishable batch.
+    - cron: "30 7 * * 1"
+  workflow_dispatch:
+
+# No pull_request trigger, matching the sibling drift jobs. The job fails on the state of
+# *other* repositories — a deploy key added there, a release config changed there — which
+# no pull request here can fix, so a PR trigger would make this repository's pull requests
+# red for reasons they do not own. Run it by hand (workflow_dispatch, or
+# scripts/deploykey-policy.sh locally) when changing the check or the register.
+
+permissions:
+  contents: read
+
+jobs:
+  drift:
+    name: Deploy-key trait drift
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      # GITHUB_TOKEN is scoped to THIS repository, so it can read neither another
+      # repository's .releaserc.json nor its deploy keys — every check would fail as
+      # unreadable and the job would be uniformly, meaninglessly red. RTLDEV_MW_CI_TOKEN
+      # reads across the organisation, which is all this needs; it never writes anywhere.
+      #
+      # Deploy keys need repository administration:read, which is a scope beyond what the
+      # Node policy job asks of the same token. Without it the listing is a 403, and the
+      # check reports that as a failure rather than as "no keys" — see the header of
+      # deploykey-policy.sh on why an unread listing must never read as an empty one.
+      #
+      # The fallback to GITHUB_TOKEN is deliberate and safe: without the secret the run
+      # fails loudly on unreadable repositories rather than passing on an empty set.
+      - name: Check every repository against the releases-via-deploykey trait
+        env:
+          GH_TOKEN: ${{ secrets.RTLDEV_MW_CI_TOKEN || secrets.GITHUB_TOKEN }}
+        run: scripts/deploykey-policy.sh --verbose

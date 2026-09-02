@@ -134,6 +134,7 @@ download of repositories the session may never touch.
 | `.github/repo-settings/`            | The settings themselves: baseline, profiles, per-repo overrides      |
 | `scripts/node-policy.sh`            | Reports repositories whose Node/npm/pnpm declaration has drifted     |
 | `.github/node-policy.conf`          | The one Node toolchain every repository is meant to declare          |
+| `scripts/deploykey-policy.sh`       | Reports repositories whose deploy-key release trait is wrong         |
 | `repos/`                            | The submodule checkouts. Nothing in here is edited from here         |
 | `.github/workflows/quality.yml`     | Prettier, actionlint, shellcheck, and the register consistency check |
 | `.github/workflows/repos-drift.yml` | Weekly: has a new repository appeared that is not registered?        |
@@ -193,9 +194,51 @@ while and that nothing depends on any more may still be deleted — judged at th
 on that repository, rather than mandated or forbidden here.
 
 Nothing needs to be added anywhere to retire a repository; things need to be **removed**.
-`org-settings.sh` and `node-policy.sh` both skip archived repositories at run time
+`org-settings.sh`, `node-policy.sh` and `deploykey-policy.sh` all skip archived repositories at run time
 already, and the settings drift job stops demanding a register entry once the repository
 is archived.
+
+### The deploy-key release trait
+
+Ten repositories release by pushing the version bump and the changelog straight to their
+default branch, which only works because the branch ruleset names a deploy key as its one
+bypass actor. That is the `releases-via-deploykey` trait in `_register.tsv`, and until
+RSRMID-3035 nothing derived it from what the repositories actually do — so the register
+could be perfectly self-consistent and still wrong about one of them. RSRMID-3025 was six
+days of broken releases from exactly that.
+
+```sh
+pnpm deploykey:policy            # report drift everywhere
+pnpm deploykey:policy --verbose  # and list the repositories that are clean
+```
+
+The rule it checks is **(release config OR write deploy key) implies the trait, and the
+trait implies exactly one write deploy key**. Two signals, because neither alone is
+enough. The release config is the _cause_ — `@semantic-release/git` in a repository's own
+plugins array, or another repository naming it as a `distributionRepo` in
+`release-products.json`. A write-enabled deploy key is the _mechanism_, and it is what
+catches `whmcs`, which is built zips and a `release.json` with no release config at all
+for a config-only check to read.
+
+The "exactly one" is not tidiness. GitHub grants the bypass to deploy keys **as a class** —
+the API requires `actor_id` null for `actor_type` `DeployKey` — so a second write-enabled
+key on a trait repository silently widens the bypass from "the release push" to "anything
+holding any write key here".
+
+Two traps are worth knowing, because both were hit while cross-checking this by hand.
+`@semantic-release/git` is a **prefix of** `@semantic-release/github`, so a grep over the
+config file reports every repository that publishes a GitHub release; the plugins array is
+parsed and compared with string equality instead. And it enumerates from GitHub rather
+than `repos/`, because `whmcs` and `dnscontrol` are usually not checked out — a check
+reading working trees would skip `whmcs`, the one repository the key signal exists for.
+
+It also checks every name in `_register.tsv`, including one the organisation listing did
+not return, and fails on it rather than passing quietly. That is what makes it useful
+against a repository in another namespace: a register row lands before the token that can
+read it does, and the row must not certify itself in the meantime.
+
+Read-only, with no write mode at all. The fix is a register row in a pull request here or
+a deploy key removed over there, and which of the two it is takes a person deciding.
 
 ### The Node toolchain policy
 

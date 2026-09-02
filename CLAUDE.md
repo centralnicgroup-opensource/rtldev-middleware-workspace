@@ -57,7 +57,7 @@ change that loses someone's work at the scale of every repository at once.
   Commits with a scope.
 - Only `push`, `pr` and `add --apply` write anything. `status`, `sync`, `pull`, `grep`,
   `foreach` and `add` must stay safe to run at any time. `org-settings.sh` writes only
-  with `--apply`, and `node-policy.sh` has no write mode at all — a manifest edit belongs
+  with `--apply`, and `node-policy.sh` and `deploykey-policy.sh` have no write mode at all — a manifest edit belongs
   in that repository's own history and review, never in a bulk apply from here.
 - Discovery that returns nothing is an error, not "zero repositories" — an API blip must
   never be read as "everything was deleted".
@@ -85,6 +85,7 @@ shellcheck --severity=warning scripts/*.sh .devcontainer/*.sh
 ./scripts/ws.sh status                     # cheap, read-only, exercises the register
 ./scripts/ws.sh sync devcontainer-features # smallest repository, ~200 KB
 ./scripts/node-policy.sh                   # read-only, needs an org-wide token
+./scripts/deploykey-policy.sh              # read-only, needs deploy-key read scope
 pnpm prettier
 ```
 
@@ -108,6 +109,14 @@ of `npx` for a package that is genuinely not a dependency.
   It needs no register: it enumerates from GitHub and checks everything with a
   `package.json`. It has **no trigger on `pull_request`**, deliberately — the job fails
   on drift that only a commit in _another_ repository can fix.
+- `deploykey-policy-drift.yml` runs weekly and **fails** when a repository's
+  `releases-via-deploykey` trait disagrees with what the repository does: a release
+  config or a write-enabled deploy key without the trait, or the trait with anything
+  other than exactly one write key. Two signals, because the cause (`@semantic-release/git`
+  in the plugins array) is unreadable for a distribution repository like `whmcs`, and the
+  mechanism (the deploy key) is what catches it. The plugins array is **parsed, never
+  grepped** — `@semantic-release/git` is a prefix of `@semantic-release/github`. Like the
+  Node job it has **no `pull_request` trigger** and no write mode.
 - **Devcontainer:** the frame is in `.devcontainer/`; shared behaviour comes from the
   `devbase` Feature by version. Never fork its scripts here. No language runtimes are
   installed — that is a decision, not an omission (see README).
