@@ -75,6 +75,15 @@
 # `extends` that moves the plugins into a shareable config — is reported rather than
 # treated as absent.
 #
+# With one narrowing, and it is a narrowing of scope rather than of rigour. An unparseable
+# config is a failure only when nothing else has answered: no readable cause, no write
+# deploy key, no trait. Where the register already asserts the trait and the repository
+# already has exactly one write key, the rule has both of its answers, and what that file
+# says about @semantic-release/git could not change the conclusion either way. whmcs-src
+# is precisely that case — .releaserc.mjs, the trait, one key — and failing on it would
+# leave the weekly job red for ever on the repository the trait matters most for, which is
+# how a check stops being read.
+#
 # Read-only, with no write mode at all, deliberately. The fix for a repository that fires
 # a signal is either a register row here or a deploy key removed there, and which of the
 # two it is takes a person deciding.
@@ -271,11 +280,13 @@ check_repo() {
   fi
 
   # --- signal: the cause, in this repository's own configuration
+  #
+  # An unparseable release config is collected rather than reported here, because whether
+  # it matters depends on the trait and the key count, and neither is known yet. See "the
+  # rule" below for when it is a failure and when it is nothing.
+  local unparseable=()
   for f in $UNPARSEABLE_CONFIGS; do
-    if has_entry "$entries" "$f"; then
-      FAILED+=("$name")
-      DRIFT+=("$f is a release config this cannot parse — the plugins array is unverified, which is not the same as absent")
-    fi
+    has_entry "$entries" "$f" && unparseable+=("$f")
   done
 
   if has_entry "$entries" "$RELEASERC"; then
@@ -321,6 +332,15 @@ check_repo() {
     if [ -n "$cause" ] || [ "$mechanism" -eq 1 ]; then
       DRIFT+=("applying settings to it as it stands would set bypass_actors to [] and break its release — this is the RSRMID-3025 failure")
     fi
+    # No trait and no readable cause: an unparseable config is the one thing that could
+    # still have said otherwise, so not being able to read it is a genuine gap. It is a
+    # failure rather than drift because the answer is unknown, not wrong.
+    if [ "${#unparseable[@]}" -gt 0 ] && [ -z "$cause" ] && [ "$mechanism" -eq 0 ]; then
+      FAILED+=("$name")
+      for f in "${unparseable[@]}"; do
+        DRIFT+=("$f is a release config this cannot parse, and nothing else says whether this repository releases to its branch — unverified is not the same as absent")
+      done
+    fi
   else
     # The trait is only as safe as the "exactly one" it promises. Zero is a trait with no
     # mechanism behind it — the bypass is granted to a class with no member, so the push
@@ -331,6 +351,16 @@ check_repo() {
       else
         DRIFT+=("carries $TRAIT with $nkeys write-enabled deploy keys ($(printf '%s' "$keys" | tr '\n' ' ')) — the bypass is granted to deploy keys as a class, so every one of them can push past the ruleset")
       fi
+    fi
+    # And here an unparseable config is nothing at all. The register already asserts the
+    # trait and the one-key invariant already holds, so whether that file lists
+    # @semantic-release/git cannot change the conclusion — the rule has both its answers.
+    # Reported under --verbose so the output still accounts for the file, but never as a
+    # failure: whmcs-src's .releaserc.mjs is exactly this case, and treating it as one
+    # would leave the weekly job red for ever on the repository the trait matters most for.
+    if [ "${#unparseable[@]}" -gt 0 ] && [ "$VERBOSE" -eq 1 ]; then
+      printf '%-46s note: %s not parsed; the trait and one write key already decide this\n' \
+        "$name" "$(printf '%s ' "${unparseable[@]}")"
     fi
   fi
 
