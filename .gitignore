@@ -17,5 +17,14 @@ Thumbs.db
 /out/
 *.log
 
+# Credential material, defensively. The per-namespace tokens live on the host under
+# ~/.config/rtldev-middleware-workspace/tokens and are mounted read-only into the
+# container, so nothing here should ever hold one — these patterns exist so that a
+# mistaken copy into the working tree cannot be committed by `git add -A`.
+*.token
+/tokens/
+.env
+.env.*
+
 # NOTE: repos/ is deliberately absent. Those directories are submodules — git tracks
 # them as gitlinks, and ignoring the path would break `git submodule` entirely.

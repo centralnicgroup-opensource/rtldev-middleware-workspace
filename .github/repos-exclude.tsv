@@ -1,0 +1,35 @@
+# Repositories that match rtldev-middleware-* but are deliberately NOT submodules here.
+#
+# Tab-separated: <namespace>\t<repository>\t<reason>
+#
+# Without this file, "we decided this one does not belong in the workspace" and "nobody
+# has got round to registering it" are the same state. repos-drift.yml fails on a
+# repository that is in neither register, which is the whole point of it — so the only
+# way to quieten it about a repository we never want was to stop running it. A row here
+# says the decision was made, and by whom it can be questioned.
+#
+# This is not the same exclusion as `exclude` in repo-settings/_register.tsv, and the two
+# are not interchangeable:
+#
+#   here                  not part of this workspace at all — out of .gitmodules, and out
+#                         of the settings register's coverage question too.
+#   profile `exclude`     ours, checked out as a submodule, settings deliberately
+#                         unmanaged. dnscontrol is the case: we want the checkout, and its
+#                         settings belong to the upstream project we forked.
+#
+# Nothing needs a row here to be left out for being archived or for being this repository
+# itself — those are answered by ws_discover in scripts/repos.sh, not by a decision
+# anyone has to record.
+#
+# A row for a namespace this workspace does not yet span is inert rather than an error:
+# the only question ever asked of this file is "is <repository> in <namespace> excluded",
+# so a decision can be declared before the namespace goes live. `ws.sh add` warns about a
+# row it could not match in a namespace it *did* query, which is how a repository that has
+# since been renamed or deleted stops being silently vouched for.
+
+# --- centralnicgroup ---------------------------------------------------------
+# Declared ahead of that namespace going live (RSRMID-3027), so the drift job is correct
+# from the first run rather than red for three repositories nobody meant to register.
+centralnicgroup	rtldev-middleware-playground-repo	sandbox, not a product
+centralnicgroup	rtldev-middleware-landingpage-whoistrustee	a website, not middleware
+centralnicgroup	rtldev-middleware-mcp-dis	third-party fork

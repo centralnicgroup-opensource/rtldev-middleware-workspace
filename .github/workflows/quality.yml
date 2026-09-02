@@ -99,23 +99,48 @@ jobs:
           set -euo pipefail
           fail=0
 
+          # Sourced rather than duplicated: the namespaces this workspace spans are
+          # declared once, in WS_ORGS, and a workflow carrying its own copy of that list
+          # is a workflow that goes on passing after the list changes. Nothing in repos.sh
+          # touches the network at load time.
+          # shellcheck source=scripts/repos.sh
+          . ./scripts/repos.sh
+
+          # The registers themselves: a row whose namespace this workspace knows nothing
+          # about, or a repository name claimed by two namespaces, is fatal here rather
+          # than at the first apply.
+          ws_register_check
+
           # Every .gitmodules entry must have a matching gitlink (mode 160000).
           while read -r path; do
             [ -n "$path" ] || continue
+
+            # repos/<namespace>/<full-name>. The namespace is part of the path because a
+            # repository is identified by namespace and name together; a two-segment path
+            # is the pre-RSRMID-3027 layout and no longer resolvable.
+            org=""
             case "$path" in
-              repos/rtldev-middleware-*) ;;
+              repos/*/rtldev-middleware-*)
+                org=${path#repos/}
+                org=${org%/*}
+                ;;
               *)
-                echo "::error::submodule path outside the repos/rtldev-middleware-* convention: $path"
+                echo "::error::submodule path outside the repos/<namespace>/rtldev-middleware-* convention: $path"
                 fail=1
                 ;;
             esac
+            if [ -n "$org" ] && ! printf '%s\n' "${WS_ORGS[@]}" | grep -qxF "$org"; then
+              echo "::error::$path is under namespace '$org', which is not in WS_ORGS (${WS_ORGS[*]})"
+              fail=1
+            fi
+
             mode=$(git ls-files --stage -- "$path" | awk '{print $1}')
             if [ "$mode" != "160000" ]; then
               echo "::error::$path is in .gitmodules but has no gitlink in the index"
               fail=1
             fi
             url=$(git config --file .gitmodules --get "submodule.$path.url")
-            expected="https://github.com/centralnicgroup-opensource/$(basename "$path").git"
+            expected="https://github.com/${org}/$(basename "$path").git"
             if [ "$url" != "$expected" ]; then
               echo "::error::$path url is '$url', expected '$expected'"
               fail=1

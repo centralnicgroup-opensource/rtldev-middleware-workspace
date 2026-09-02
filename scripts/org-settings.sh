@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 #
-# Reconcile the GitHub settings of every rtldev-middleware-* repository against the
-# layered configuration in .github/repo-settings/.
+# Reconcile the GitHub settings of every rtldev-middleware-* repository, in every
+# namespace this workspace spans, against the layered configuration in
+# .github/repo-settings/.
 #
 #   scripts/org-settings.sh                  # report drift everywhere, change nothing
 #   scripts/org-settings.sh --apply          # make GitHub match, everywhere
@@ -20,6 +21,10 @@
 # later assignment simply wins:
 #
 #   _baseline.conf  ->  _profile-<profile>.conf  ->  <repository-name>.conf
+#
+# Each repository is reconciled with its own namespace's token, set for that one engine
+# invocation. There is no global "current organisation" to get wrong, and no `gh auth
+# switch` left behind by a run that died half way.
 #
 # Exit status: 0 clean, 1 drift or an unregistered repository, 2 could not run.
 
@@ -62,19 +67,6 @@ ws_need gh "needed to read and write repository settings"
 ws_need jq "needed to read the GitHub API"
 [ -f "$REGISTER" ] || ws_die "no register at $REGISTER"
 [ -x "$ENGINE" ] || ws_die "no engine at $ENGINE"
-
-# --- discovery ---------------------------------------------------------------
-# Every rtldev-middleware-* repository in the organisation, whatever its visibility or
-# archived state — "<name>\t<archived>" per line. This deliberately differs from
-# ws_discover in repos.sh, which answers a different question: that one lists what can
-# be a submodule (public, non-archived, not the workspace itself), while settings
-# management has to cover the internal, the private, the archived and this repository.
-discover() {
-  gh api --paginate "orgs/$ORG/repos?type=all&per_page=100" 2>/dev/null \
-    | jq -r --arg p "$REPO_PREFIX" '
-        .[] | select(.name | startswith($p)) | [.name, (.archived | tostring)] | @tsv
-      '
-}
 
 # --- layer resolution --------------------------------------------------------
 # Concatenation, not merging. The engine sources the result, so precedence is just the
@@ -138,9 +130,28 @@ fi
 # exists to prevent: every subsequent "apply to all our repositories" silently covers
 # one repository fewer, and nothing says so.
 
-ws_info "Discovering ${REPO_PREFIX}* repositories in $ORG ..."
-DISCOVERED="$(discover)"
-[ -n "$DISCOVERED" ] || ws_die "discovery returned nothing — refusing to read that as 'no repositories'"
+# ws_die exits 1, and this script reserves 1 for "there is drift". A precondition that
+# fails is "could not run", so the aborting checks are called in a subshell whose exit is
+# remapped to 2 — otherwise a broken register would report as ordinary drift, and the
+# person reading the summary would go looking for a settings difference.
+must() { ("$@") || exit 2; }
+
+must ws_register_check
+
+ws_info "Discovering ${REPO_PREFIX}* repositories in ${WS_ORGS[*]} ..."
+# Whatever the visibility and whatever the archived state. This deliberately differs from
+# the submodule register's question, which is what can be *checked out* — settings
+# management has to cover the archived and this repository too, and neither register is
+# derivable from the other.
+DISCOVERED="$(ws_discover_all)" || exit 2
+
+# The credential self-test, before any judgement is made about coverage. A register row
+# the token cannot see used to be a warning here, on the reasoning that it might have
+# been renamed; that reading is no longer available. With two namespaces and one token
+# per namespace, "not visible to this token" is the likeliest cause and the most
+# dangerous one — a repository whose settings this workspace owns silently stops being
+# reconciled, and the report still says clean.
+must ws_assert_discovery_covers_registers "$DISCOVERED"
 
 # Coverage is asked of the active repositories only. A retired repository is archived,
 # and GitHub rejects settings writes on an archived repository — so demanding a register
@@ -148,25 +159,29 @@ DISCOVERED="$(discover)"
 # are filtered out of the coverage question here rather than out of discovery, so that a
 # register which still names one is skipped by name further down instead of being handed
 # to the engine.
-ACTIVE="$(printf '%s\n' "$DISCOVERED" | awk -F'\t' '$2 == "false" { print $1 }' | sort)"
+#
+# repos-exclude.tsv comes out too. A repository declared not to be part of this workspace
+# at all is not a settings gap; demanding a row for it here would mean recording the same
+# decision in two files, and the drift job failing until both had it.
+ACTIVE="$(
+  printf '%s\n' "$DISCOVERED" | awk -F'\t' '$5 == "false" { print $1 "\t" $2 }' \
+    | while IFS=$'\t' read -r o n; do
+      ws_is_excluded "$o" "$n" || printf '%s\n' "$n"
+    done | sort
+)"
 
 UNREGISTERED="$(comm -23 <(printf '%s\n' "$ACTIVE") <(ws_register_names))"
-VANISHED="$(comm -13 <(printf '%s\n' "$DISCOVERED" | cut -f1 | sort) <(ws_register_names))"
 
 if [ -n "$UNREGISTERED" ]; then
   ws_warn "not in $REGISTER:"
   while IFS= read -r name; do ws_warn "  $name"; done <<<"$UNREGISTERED"
-fi
-if [ -n "$VANISHED" ]; then
-  ws_warn "registered but not found on GitHub (renamed, deleted, or not visible to this token):"
-  while IFS= read -r name; do ws_warn "  $name"; done <<<"$VANISHED"
 fi
 
 # Archived repositories are looked up rather than listed in the register: GitHub rejects
 # settings writes on them, so archiving one must not require an edit here to stay
 # correct.
 is_archived() {
-  printf '%s\n' "$DISCOVERED" | awk -F'\t' -v n="$1" '$1 == n { print $2 }' | grep -qx true
+  printf '%s\n' "$DISCOVERED" | awk -F'\t' -v n="$1" '$2 == n { print $5 }' | grep -qx true
 }
 
 # --- reconcile ---------------------------------------------------------------
@@ -185,6 +200,7 @@ trap 'rm -rf "$TMPDIR_RESOLVED"' EXIT
 
 for name in "${TARGETS[@]}"; do
   profile="$(ws_register_profile "$name")"
+  org="$(ws_register_org "$name")"
 
   if [ "$profile" = "exclude" ]; then
     ws_info "skip $name — excluded by the register"
@@ -201,10 +217,10 @@ for name in "${TARGETS[@]}"; do
   conf="$TMPDIR_RESOLVED/${name}.conf"
   resolve_config "$name" "$profile" "$conf"
 
-  printf '\n==> %s (%s)\n' "$name" "$profile"
+  printf '\n==> %s/%s (%s)\n' "$org" "$name" "$profile"
   # Never exit from inside the loop: one unreachable repository must not decide that
   # every other repository goes unchecked.
-  "$ENGINE" "--$MODE" --repo "$ORG/$name" --config "$conf"
+  ws_with_token "$org" "$ENGINE" "--$MODE" --repo "$org/$name" --config "$conf"
   case "$?" in
     0) CLEAN=$((CLEAN + 1)) ;;
     1) DRIFTED+=("$name") ;;

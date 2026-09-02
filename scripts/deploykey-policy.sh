@@ -142,29 +142,38 @@ ws_need gh "needed to read deploy keys and release configuration"
 ws_need jq "needed to read the GitHub API"
 
 # --- GitHub reads -------------------------------------------------------------
-# type=all, because the trait is about how a repository releases, which is as true of a
-# private or internal repository as of a public one.
-discover() {
-  gh api --paginate "orgs/$ORG/repos?type=all&per_page=100" 2>/dev/null \
-    | jq -r --arg p "$REPO_PREFIX" '
-        .[] | select(.name | startswith($p)) | [.name, (.archived | tostring)] | @tsv
-      '
-}
+# Which namespace each repository is in, so that every read below goes out with that
+# namespace's token and against that namespace's path. A repository whose namespace is
+# unknown reads as unreadable and is reported as a failure per repository, which is the
+# same outcome as any other read that did not happen.
+declare -A REPO_ORG=()
+
+repo_org() { printf '%s' "${REPO_ORG[$1]:-}"; }
+repo_nwo() { printf '%s/%s' "$(repo_org "$1")" "$1"; }
 
 root_entries() {
-  gh api "repos/$ORG/$1/contents" --jq '.[].name' 2>/dev/null
+  [ -n "$(repo_org "$1")" ] || return 0
+  ws_gh "$(repo_org "$1")" api "repos/$(repo_nwo "$1")/contents" --jq '.[].name' 2>/dev/null
 }
 
 file_content() {
-  gh api "repos/$ORG/$1/contents/$2" --jq '.content' 2>/dev/null | base64 -d 2>/dev/null
+  [ -n "$(repo_org "$1")" ] || return 0
+  ws_gh "$(repo_org "$1")" api "repos/$(repo_nwo "$1")/contents/$2" --jq '.content' 2>/dev/null \
+    | base64 -d 2>/dev/null
 }
 
 # Write-enabled deploy keys, one title per line — or the sentinel when the listing could
 # not be read. Returning empty on a failed read would clear the repository on the very
 # signal the read exists to gather.
+#
+# This is also the call that needs the most from a credential: listing deploy keys is
+# administration:read, not public read. A token scoped to the wrong namespace fails it
+# even on a public repository, which is why it is the one probe worth trusting about
+# cross-namespace reach.
 write_deploy_keys() {
-  local out
-  if ! out="$(gh api --paginate "repos/$ORG/$1/keys" 2>/dev/null \
+  local out org
+  org="$(repo_org "$1")"
+  if [ -z "$org" ] || ! out="$(ws_gh "$org" api --paginate "repos/$(repo_nwo "$1")/keys" 2>/dev/null \
     | jq -r '.[] | select(.read_only == false) | .title')"; then
     printf '%s' "$SENTINEL_UNREADABLE"
     return
@@ -345,15 +354,39 @@ check_repo() {
 
 # --- run ----------------------------------------------------------------------
 
-ws_info "Discovering ${REPO_PREFIX}* repositories in $ORG ..."
-DISCOVERED="$(discover)"
-[ -n "$DISCOVERED" ] || ws_die "discovery returned nothing — refusing to read that as 'no repositories'"
+# ws_die exits 1, which this script reserves for "there is drift". A malformed register
+# is "could not run", so it is checked in a subshell whose exit is remapped to 2.
+(ws_register_check) || exit 2
+
+# Every namespace, and every visibility. The trait is about how a repository releases,
+# which is as true of a private or internal repository as of a public one — and the
+# repository the trait matters most for, whmcs-src, is private and in the other namespace.
+ws_info "Discovering ${REPO_PREFIX}* repositories in ${WS_ORGS[*]} ..."
+DISCOVERED="$(ws_discover_all)" || exit 2
 
 REGISTERED="$(ws_register_names)"
 [ -n "$REGISTERED" ] || ws_die "$WS_REGISTER lists no repositories — refusing to read that as 'nothing to check'"
 
-ARCHIVED_NAMES="$(printf '%s\n' "$DISCOVERED" | awk -F'\t' '$2 == "true" { print $1 }' | sort)"
-ACTIVE_NAMES="$(printf '%s\n' "$DISCOVERED" | awk -F'\t' '$2 == "false" { print $1 }' | sort)"
+ARCHIVED_NAMES="$(printf '%s\n' "$DISCOVERED" | awk -F'\t' '$5 == "true" { print $2 }' | sort)"
+ACTIVE_NAMES="$(printf '%s\n' "$DISCOVERED" | awk -F'\t' '$5 == "false" { print $2 }' | sort)"
+
+while IFS=$'\t' read -r org name _; do
+  [ -n "$name" ] || continue
+  REPO_ORG["$name"]="$org"
+done < <(printf '%s\n' "$DISCOVERED")
+
+# Deliberately no ws_assert_discovery_covers_registers here, unlike org-settings.sh. A
+# register row the listing did not return has to be *checked and fail*, one repository at
+# a time, rather than aborting the run: the row lands before the credential that can read
+# it does, and the report on every other repository is worth having in the meantime. So
+# the namespace for such a name comes from its register row, and the read below fails as
+# unreadable — which is what the rule wants, since an unread deploy-key listing is not an
+# empty one.
+while IFS= read -r name; do
+  [ -n "$name" ] || continue
+  [ -n "${REPO_ORG[$name]:-}" ] && continue
+  REPO_ORG["$name"]="$(ws_register_org "$name")"
+done <<<"$REGISTERED"
 
 is_archived() { printf '%s\n' "$ARCHIVED_NAMES" | grep -qxF "$1"; }
 
@@ -362,7 +395,7 @@ if [ "${#SELECTED[@]}" -gt 0 ]; then
   for name in "${TARGETS[@]}"; do
     printf '%s\n' "$ACTIVE_NAMES" | grep -qxF "$name" && continue
     printf '%s\n' "$REGISTERED" | grep -qxF "$name" && continue
-    ws_die "neither active in $ORG nor named in $(basename "$WS_REGISTER"): $name"
+    ws_die "neither active in ${WS_ORGS[*]} nor named in $(basename "$WS_REGISTER"): $name"
   done
 else
   # The union, so that neither list can narrow the other's coverage: a repository absent

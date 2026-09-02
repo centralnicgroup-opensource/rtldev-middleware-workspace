@@ -28,7 +28,8 @@
   "initializeCommand": {
     "claude-state": "mkdir -p ${localEnv:HOME}/.claude",
     "ssh-dir": "mkdir -p ${localEnv:HOME}/.ssh",
-    "gitconfig": "touch ${localEnv:HOME}/.gitconfig"
+    "gitconfig": "touch ${localEnv:HOME}/.gitconfig",
+    "tokens-dir": "mkdir -p ${localEnv:HOME}/.config/rtldev-middleware-workspace/tokens"
   },
 
   "features": {
@@ -54,12 +55,18 @@
   // because every submodule operation talks to GitHub. /WSL_USER is what devbase's
   // history persistence reads; .claude carries Claude Code session state.
   //
+  // The tokens directory holds one GitHub PAT per namespace, named after the namespace,
+  // and is where `ws.sh credentials` looks. It is mounted **readonly** on purpose: the
+  // container has to read those tokens, and nothing in it has any business writing one.
+  // They live on the host and never enter the repository — see .gitignore.
+  //
   // The ${localEnv:HOME}${localEnv:USERPROFILE} concatenation resolves to whichever of
   // the two the host defines.
   "mounts": [
     "source=${localEnv:HOME}/.ssh,target=/home/vscode/.ssh,type=bind,readonly",
     "source=${localEnv:HOME}/.gitconfig,target=/home/vscode/.gitconfig,type=bind,consistency=cached",
     "source=${localEnv:HOME}${localEnv:USERPROFILE},target=/WSL_USER,type=bind,consistency=cached",
-    "source=${localEnv:HOME}/.claude,target=/home/vscode/.claude,type=bind,consistency=cached"
+    "source=${localEnv:HOME}/.claude,target=/home/vscode/.claude,type=bind,consistency=cached",
+    "source=${localEnv:HOME}/.config/rtldev-middleware-workspace/tokens,target=/home/vscode/.config/rtldev-middleware-workspace/tokens,type=bind,readonly"
   ]
 }
