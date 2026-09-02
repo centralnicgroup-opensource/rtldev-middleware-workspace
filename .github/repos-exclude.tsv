@@ -28,8 +28,8 @@
 # since been renamed or deleted stops being silently vouched for.
 
 # --- centralnicgroup ---------------------------------------------------------
-# Declared ahead of that namespace going live (RSRMID-3027), so the drift job is correct
-# from the first run rather than red for three repositories nobody meant to register.
+# Two of the five active rtldev-middleware-* repositories in that namespace. The other
+# three are registered; the two archived ones need no row here, because archiving already
+# takes a repository out of both registers.
 centralnicgroup	rtldev-middleware-playground-repo	sandbox, not a product
-centralnicgroup	rtldev-middleware-landingpage-whoistrustee	a website, not middleware
 centralnicgroup	rtldev-middleware-mcp-dis	third-party fork

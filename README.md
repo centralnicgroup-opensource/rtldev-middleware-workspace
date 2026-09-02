@@ -263,6 +263,16 @@ When we stop maintaining an `rtldev-middleware-*` repository:
 archived repository, so an internal-bound one has to be made internal first and archived
 second. Doing it the other way round means unarchiving to fix it.
 
+Two repositories archived before this rule existed are `private` rather than `internal`
+(`app` and `whmcs-changelog-monitor`, both in `centralnicgroup`). Private is stricter than
+internal, not weaker, so there is nothing to repair — and repairing it would mean
+unarchiving them to widen their access. Left as they are, deliberately.
+
+They also show the other half of the archive rule working as intended: deletion is a
+separate, later, per-case decision, and three of their neighbours — `fmonitor`,
+`registrant-email-verification` and `statistics` — reached it on 2026-09-02, having been
+archived first.
+
 A public repository that is archived rather than made internal stays public on purpose.
 Moving it out of `centralnicgroup-opensource` would not unpublish it — forks, clones and
 any published package pointing at it all persist — so for anything customer-facing the

@@ -71,6 +71,23 @@ centralnicgroup-opensource	rtldev-middleware-devcontainer-features	internal,rele
 centralnicgroup-opensource	rtldev-middleware-dnscontrol-dnsconfig	internal	test/demo config for the dnscontrol provider module
 centralnicgroup-opensource	rtldev-middleware-semantic-release-plugins	internal
 
+# The centralnicgroup namespace. Every repository here is private, so three baseline
+# settings are unsatisfiable on all three and the engine reports them as unavailable rather
+# than as drift — secret scanning and its push protection need GitHub Advanced Security at
+# this visibility, and private vulnerability reporting is public-only whatever the plan.
+#
+# None of the three has a .github/ISSUE_TEMPLATE/, so HAS_ISSUES=false from the internal
+# profile leaves nothing behind. Checked, because the profile asks for the templates to be
+# deleted in the same change.
+#
+# The first apply against these will be a real tightening rather than a no-op: all three
+# currently allow squash and merge commits, none of them deletes the branch on merge, and
+# onboarding has projects and the wiki on. That is intended and is recorded here so it is
+# not read as an accident.
+centralnicgroup	rtldev-middleware-whmcs-src	internal,releases-via-deploykey	unencrypted source of the CNR WHMCS bundle; two release identities, see its own .conf
+centralnicgroup	rtldev-middleware-whmcs-core	internal
+centralnicgroup	rtldev-middleware-onboarding	internal	middleware onboarding material
+
 # --- Excluded ----------------------------------------------------------------
 # A fork of StackExchange/dnscontrol. Its settings are not ours to hold an opinion
 # about, and applying the baseline would fight the upstream repository's own shape.
