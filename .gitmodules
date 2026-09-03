@@ -21,7 +21,7 @@
 [submodule "repos/centralnicgroup-opensource/rtldev-middleware-idna-uts46"]
 	path = repos/centralnicgroup-opensource/rtldev-middleware-idna-uts46
 	url = https://github.com/centralnicgroup-opensource/rtldev-middleware-idna-uts46.git
-	branch = master
+	branch = main
 [submodule "repos/centralnicgroup-opensource/rtldev-middleware-java-sdk"]
 	path = repos/centralnicgroup-opensource/rtldev-middleware-java-sdk
 	url = https://github.com/centralnicgroup-opensource/rtldev-middleware-java-sdk.git
