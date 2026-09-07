@@ -71,9 +71,9 @@ centralnicgroup-opensource	rtldev-middleware-devcontainer-features	internal,rele
 centralnicgroup-opensource	rtldev-middleware-dnscontrol-dnsconfig	internal	test/demo config for the dnscontrol provider module
 centralnicgroup-opensource	rtldev-middleware-semantic-release-plugins	internal
 
-# The centralnicgroup namespace. One row, because the review that widened the register to
-# this namespace ended up excluding everything else in it — see repos-exclude.tsv, and the
-# reasons there, which are the point of that file.
+# The centralnicgroup namespace. Two rows: the review that widened the register to this
+# namespace excluded everything else in it at the time — see repos-exclude.tsv, and the
+# reasons there, which are the point of that file — and blesta-dev was created afterwards.
 #
 # whmcs-src is private, so three baseline settings are unsatisfiable on it and the engine
 # reports them as unavailable rather than as drift: secret scanning and its push protection
@@ -88,6 +88,23 @@ centralnicgroup-opensource	rtldev-middleware-semantic-release-plugins	internal
 # allow_merge_commit goes false. Both are intended, and are recorded here so the apply is
 # not read as an accident.
 centralnicgroup	rtldev-middleware-whmcs-src	internal,releases-via-deploykey	unencrypted source of the CNR WHMCS bundle; two release identities, see its own .conf
+
+# blesta-dev is the internal source for the Blesta integration, the same split whmcs-src
+# has with rtldev-middleware-whmcs. It was created empty on 2026-09-03 and seeded from
+# rtldev-middleware-template under RSRMID-3050 so it could be pinned at all.
+#
+# internal only, deliberately not releases-via-deploykey. It has no release pipeline, no
+# .releaserc and no deploy key, so that profile would grant a branch-protection bypass
+# ahead of any need for one — and deploykey-policy.sh reports this profile with anything
+# other than exactly one write-enabled deploy key. The profile and the key land together
+# or not at all; RSRMID-3025 is what the alternative looks like.
+#
+# Unlike whmcs-src it does still carry .github/ISSUE_TEMPLATE/ and .github/SECURITY.md
+# from the template, so HAS_ISSUES=false from the internal profile will leave both behind
+# as dead files, and SECURITY.md advertises private vulnerability reporting, which is
+# public-only. Both are on RSRMID-3050 rather than fixed here, because they are commits
+# in that repository.
+centralnicgroup	rtldev-middleware-blesta-dev	internal	internal source for the Blesta integration; seeded from the template, setup unfinished (TEMPLATE-SETUP.md still present)
 
 # --- Excluded ----------------------------------------------------------------
 # A fork of StackExchange/dnscontrol. Its settings are not ours to hold an opinion
