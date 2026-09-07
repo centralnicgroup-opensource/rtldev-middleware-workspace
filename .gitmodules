@@ -62,3 +62,7 @@
 	path = repos/centralnicgroup/rtldev-middleware-whmcs-src
 	url = https://github.com/centralnicgroup/rtldev-middleware-whmcs-src.git
 	branch = main
+[submodule "repos/centralnicgroup/rtldev-middleware-blesta-dev"]
+	path = repos/centralnicgroup/rtldev-middleware-blesta-dev
+	url = https://github.com/centralnicgroup/rtldev-middleware-blesta-dev.git
+	branch = main
