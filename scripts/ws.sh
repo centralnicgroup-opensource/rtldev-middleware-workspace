@@ -424,7 +424,6 @@ cmd_push() {
 # Requires an authenticated gh; everything up to here works without one.
 cmd_pr() {
   ws_need gh
-  gh auth status >/dev/null 2>&1 || ws_die "gh is not authenticated — run: gh auth login"
 
   local title="${1:-}"
   local body="${2:-}"
@@ -432,7 +431,30 @@ cmd_pr() {
   [ -n "$title" ] || ws_die "usage: ws.sh pr '<title>' '<body>' [repo...]"
 
   local full short dir branch base org nwo
-  while IFS= read -r full; do
+  local selected=()
+  while IFS= read -r full; do selected+=("$full"); done < <(ws_select_populated "$@")
+
+  # Every PR below is created through ws_gh, which sends the namespace's own token and
+  # never consults gh's login. So that is the credential to assert, per namespace and
+  # only for the namespaces actually selected — a global `gh auth status` refused runs
+  # the token files could serve perfectly well. gh's own login is the right question in
+  # exactly one case: a namespace that needs no token of its own, where ws_with_token
+  # deliberately falls through to whatever gh holds. Asserted before the first PR, not
+  # inside the loop, so a credential mistake cannot leave half the branches with a PR.
+  local -A org_checked=()
+  for full in "${selected[@]}"; do
+    org="$(ws_org_of "$full")"
+    [ -n "${org_checked[$org]:-}" ] && continue
+    org_checked["$org"]=1
+    [ -n "$(ws_token_for_org "$org")" ] && continue
+    if ws_org_needs_token "$org"; then
+      ws_die "no credential for $org — $(ws_credential_hint "$org")"
+    fi
+    gh auth status >/dev/null 2>&1 \
+      || ws_die "no credential for $org — $(ws_credential_hint "$org"), or: gh auth login"
+  done
+
+  for full in "${selected[@]}"; do
     short="$(ws_short_name "$full")"
     dir="$(ws_path "$full")"
     branch="$(git -C "$dir" rev-parse --abbrev-ref HEAD 2>/dev/null)"
@@ -458,7 +480,7 @@ cmd_pr() {
     ws_banner "$short"
     ws_gh "$org" pr create --repo "$nwo" --base "$base" --head "$branch" \
       --title "$title" --body "$body" || FAILED+=("$short")
-  done < <(ws_select_populated "$@")
+  done
   ws_report_failures
 }
 
