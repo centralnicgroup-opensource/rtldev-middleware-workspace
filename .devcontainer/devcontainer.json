@@ -23,12 +23,16 @@
   "shutdownAction": "stopContainer",
 
   // Host-side preflight for the binds at the bottom of this file: Docker creates a
-  // missing bind source itself, as a root-owned *directory* — which for ~/.gitconfig
-  // means a directory where git expects a file, on the host, outliving the container.
+  // missing bind source itself, as a root-owned *directory* — which for a bind that
+  // names a *file* means a directory where the tool expects a file, on the host,
+  // outliving the container. Both single-file binds here need the touch: ~/.gitconfig,
+  // where git expects a file, and ~/.zsh_history, where a directory would make devbase
+  // report that it could not create the history file rather than naming the cause.
   "initializeCommand": {
     "claude-state": "mkdir -p ${localEnv:HOME}/.claude",
     "ssh-dir": "mkdir -p ${localEnv:HOME}/.ssh",
     "gitconfig": "touch ${localEnv:HOME}/.gitconfig",
+    "zsh-history": "touch ${localEnv:HOME}/.zsh_history",
     "tokens-dir": "mkdir -p ${localEnv:HOME}/.config/rtldev-middleware-workspace/tokens"
   },
 
@@ -51,21 +55,35 @@
     "workspace-status": "bash .devcontainer/post-attach.sh"
   },
 
+  // Every mount names one path and grants the least it can. Read-write is the exception
+  // and needs a reason; the default is readonly.
+  //
   // .ssh and .gitconfig make git work as it does on the host — load-bearing here,
-  // because every submodule operation talks to GitHub. /WSL_USER is what devbase's
-  // history persistence reads; .claude carries Claude Code session state.
+  // because every submodule operation talks to GitHub. Both are readonly: the container
+  // reads that identity, it does not maintain it. devbase writes signing and credential
+  // config with `git config --local`, never `--global`, precisely so the host's file
+  // stays untouched, so readonly costs nothing — the one thing it stops is a stray
+  // `git config --global` inside the container editing the host's identity.
   //
   // The tokens directory holds one GitHub PAT per namespace, named after the namespace,
   // and is where `ws.sh credentials` looks. It is mounted **readonly** on purpose: the
   // container has to read those tokens, and nothing in it has any business writing one.
   // They live on the host and never enter the repository — see .gitignore.
   //
-  // The ${localEnv:HOME}${localEnv:USERPROFILE} concatenation resolves to whichever of
-  // the two the host defines.
+  // /WSL_USER is where devbase's history persistence looks for .zsh_history, and it is
+  // bound as that **single file** rather than as the host home. Binding the home
+  // directory here is what made the readonly flag on the tokens above decorative: the
+  // same inodes were reachable read-write at /WSL_USER/.config/…/tokens, so the intent
+  // stated above did not hold by a second path. Nor did .ssh's. The history file is the
+  // only thing in the host home this container has any reason to write, so it is the
+  // only thing mounted, and it is read-write because history is written. (RSRMID-3052)
+  //
+  // .claude is the remaining read-write mount and has to be: Claude Code writes session
+  // state, and it is shared with the host so a rebuild does not lose it.
   "mounts": [
     "source=${localEnv:HOME}/.ssh,target=/home/vscode/.ssh,type=bind,readonly",
-    "source=${localEnv:HOME}/.gitconfig,target=/home/vscode/.gitconfig,type=bind,consistency=cached",
-    "source=${localEnv:HOME}${localEnv:USERPROFILE},target=/WSL_USER,type=bind,consistency=cached",
+    "source=${localEnv:HOME}/.gitconfig,target=/home/vscode/.gitconfig,type=bind,readonly",
+    "source=${localEnv:HOME}/.zsh_history,target=/WSL_USER/.zsh_history,type=bind,consistency=cached",
     "source=${localEnv:HOME}/.claude,target=/home/vscode/.claude,type=bind,consistency=cached",
     "source=${localEnv:HOME}/.config/rtldev-middleware-workspace/tokens,target=/home/vscode/.config/rtldev-middleware-workspace/tokens,type=bind,readonly"
   ]
