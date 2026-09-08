@@ -87,7 +87,11 @@ and three things refuse to accept a short answer:
 Tokens are read from `$WS_TOKEN_<NAMESPACE>` in the environment, or from a file named
 after the namespace in `~/.config/rtldev-middleware-workspace/tokens/`, which the
 devcontainer mounts **read-only** from the host. Nothing is ever committed, and
-`ws.sh credentials` prints where a token came from but never the token.
+`ws.sh credentials` prints where a token came from but never the token. That read-only
+flag is only worth as much as the rest of the mount list: the devcontainer names
+individual files and directories, never the host home, because a home mount puts the
+same inodes back within reach read-write by a second path and the flag becomes
+decorative.
 
 `.gitmodules` stays uniformly HTTPS, so git itself has to choose between the two tokens on
 every fetch and push. `credential.<url>` config cannot express that — a path in the
