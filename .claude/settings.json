@@ -31,7 +31,9 @@
       "Bash(./scripts/ws.sh add)",
       "Bash(./scripts/ws.sh sync *)",
       "Bash(./scripts/ws.sh pull *)",
-      "Bash(./scripts/ws.sh help)"
+      "Bash(./scripts/ws.sh help)",
+      "Bash(./scripts/org-settings.sh --apply *)",
+      "Bash(pnpm repo:settings:apply *)"
     ]
   },
   "env": {
