@@ -93,18 +93,32 @@ centralnicgroup	rtldev-middleware-whmcs-src	internal,releases-via-deploykey	unen
 # has with rtldev-middleware-whmcs. It was created empty on 2026-09-03 and seeded from
 # rtldev-middleware-template under RSRMID-3050 so it could be pinned at all.
 #
-# internal only, deliberately not releases-via-deploykey. It has no release pipeline, no
-# .releaserc and no deploy key, so that profile would grant a branch-protection bypass
-# ahead of any need for one — and deploykey-policy.sh reports this profile with anything
-# other than exactly one write-enabled deploy key. The profile and the key land together
-# or not at all; RSRMID-3025 is what the alternative looks like.
+# It now carries releases-via-deploykey. The profile and the key land together or not at
+# all — RSRMID-3025 is what the alternative looks like — and they did: the write-enabled
+# deploy key `semantic-release` (id 162778376) was created on 2026-09-09, its private half
+# stored as this repository's RTLDEV_MW_CI_SSH_KEY, and this row given the profile in the
+# same change. Exactly one write key, which is what deploykey-policy.sh checks.
+#
+# The release pipeline itself does not exist yet — no workflow, no .releaserc. The key is
+# ahead of its consumer on purpose, so that the credential and the register agree from the
+# moment the key exists rather than after the pipeline lands.
+#
+# RTLDEV_MW_CI_DIST_SSH_KEY is also set here already, and its public half is deliberately
+# NOT installed anywhere yet. It is the identity for the push into
+# rtldev-middleware-blesta once that repository becomes a pure distribution target, the
+# way rtldev-middleware-whmcs is for whmcs-src. Installing it today would give public
+# blesta a second write-enabled deploy key beside the `semantic-release` key its own
+# release still uses, and this profile grants the ruleset bypass to deploy keys as a
+# class — so the second key would widen the bypass, not just fail the policy check. It
+# goes on at cutover, as a swap: add `distribution-push`, remove `semantic-release`, drop
+# public blesta's release.yml and its RTLDEV_MW_CI_SSH_KEY.
 #
 # Unlike whmcs-src it does still carry .github/ISSUE_TEMPLATE/ and .github/SECURITY.md
 # from the template, so HAS_ISSUES=false from the internal profile will leave both behind
 # as dead files, and SECURITY.md advertises private vulnerability reporting, which is
 # public-only. Both are on RSRMID-3050 rather than fixed here, because they are commits
 # in that repository.
-centralnicgroup	rtldev-middleware-blesta-dev	internal	internal source for the Blesta integration; seeded from the template, setup unfinished (TEMPLATE-SETUP.md still present)
+centralnicgroup	rtldev-middleware-blesta-dev	internal,releases-via-deploykey	internal source for the Blesta integration; release identity in place, pipeline still to come (TEMPLATE-SETUP.md still present)
 
 # --- Excluded ----------------------------------------------------------------
 # A fork of StackExchange/dnscontrol. Its settings are not ours to hold an opinion
