@@ -59,6 +59,11 @@ centralnicgroup-opensource	rtldev-middleware-java-sdk	customer-facing,releases-v
 centralnicgroup-opensource	rtldev-middleware-python-sdk	customer-facing,releases-via-deploykey
 centralnicgroup-opensource	rtldev-middleware-go-sdk	customer-facing,releases-via-deploykey
 centralnicgroup-opensource	rtldev-middleware-whmcs	customer-facing,releases-via-deploykey
+# blesta is a distribution target as of 2026-09-09 (RSRMID-3060), fed by
+# centralnicgroup/rtldev-middleware-blesta-dev exactly as whmcs is fed by whmcs-src. The
+# trait is unchanged and still correct — one write-enabled deploy key — but the key is now
+# `distribution-push` and the push comes from the other namespace rather than from a
+# @semantic-release/git run here. It holds no secrets of its own any more.
 centralnicgroup-opensource	rtldev-middleware-blesta	customer-facing,releases-via-deploykey
 centralnicgroup-opensource	rtldev-middleware-idna-uts46	customer-facing,releases-via-deploykey
 centralnicgroup-opensource	rtldev-middleware-php-idna-translator	customer-facing,releases-via-deploykey
@@ -103,15 +108,17 @@ centralnicgroup	rtldev-middleware-whmcs-src	internal,releases-via-deploykey	unen
 # ahead of its consumer on purpose, so that the credential and the register agree from the
 # moment the key exists rather than after the pipeline lands.
 #
-# RTLDEV_MW_CI_DIST_SSH_KEY is also set here already, and its public half is deliberately
-# NOT installed anywhere yet. It is the identity for the push into
-# rtldev-middleware-blesta once that repository becomes a pure distribution target, the
-# way rtldev-middleware-whmcs is for whmcs-src. Installing it today would give public
-# blesta a second write-enabled deploy key beside the `semantic-release` key its own
-# release still uses, and this profile grants the ruleset bypass to deploy keys as a
-# class — so the second key would widen the bypass, not just fail the policy check. It
-# goes on at cutover, as a swap: add `distribution-push`, remove `semantic-release`, drop
-# public blesta's release.yml and its RTLDEV_MW_CI_SSH_KEY.
+# RTLDEV_MW_CI_DIST_SSH_KEY is the identity for the push into rtldev-middleware-blesta,
+# which is now a pure distribution target the way rtldev-middleware-whmcs is for whmcs-src.
+# Its public half is the write-enabled deploy key `distribution-push` (id 162780246) on
+# that repository, installed on 2026-09-09 as a swap for the `semantic-release` key its own
+# release used to use — added and removed together, because this profile grants the ruleset
+# bypass to deploy keys as a class, so two write keys would have widened the bypass rather
+# than merely failed the policy check.
+#
+# What remains on the public side is a commit in that repository, not a setting here: its
+# release.yml and .releaserc.json still describe a self-release that no longer has an
+# identity. Tracked on RSRMID-3060.
 #
 # Unlike whmcs-src it does still carry .github/ISSUE_TEMPLATE/ and .github/SECURITY.md
 # from the template, so HAS_ISSUES=false from the internal profile will leave both behind
