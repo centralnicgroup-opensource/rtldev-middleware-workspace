@@ -72,8 +72,9 @@ change that loses someone's work at the scale of every repository at once.
   Commits with a scope.
 - Only `push`, `pr` and `add --apply` write anything. `status`, `sync`, `pull`, `grep`,
   `foreach` and `add` must stay safe to run at any time. `org-settings.sh` writes only
-  with `--apply`, and `node-policy.sh` and `deploykey-policy.sh` have no write mode at all — a manifest edit belongs
-  in that repository's own history and review, never in a bulk apply from here.
+  with `--apply`, and `node-policy.sh`, `deploykey-policy.sh` and `eol-policy.sh` have no
+  write mode at all — a manifest edit, a deploy key or an organisation variable is changed
+  where it lives, in its own history and review, never in a bulk apply from here.
 - Discovery that returns nothing is an error, not "zero repositories" — an API blip must
   never be read as "everything was deleted". **Per namespace**, not just overall: a
   fine-grained PAT answers a listing for any other organisation with `[]` rather than an
@@ -128,6 +129,7 @@ shellcheck --severity=warning scripts/*.sh .devcontainer/*.sh
 ./scripts/ws.sh sync devcontainer-features # smallest repository, ~200 KB
 ./scripts/node-policy.sh                   # read-only, needs an org-wide token
 ./scripts/deploykey-policy.sh              # read-only, needs deploy-key read scope
+./scripts/eol-policy.sh --from-api         # read-only, needs an org-owned token
 pnpm prettier
 ```
 
@@ -168,6 +170,19 @@ of `npx` for a package that is genuinely not a dependency.
   mechanism (the deploy key) is what catches it. The plugins array is **parsed, never
   grepped** — `@semantic-release/git` is a prefix of `@semantic-release/github`. Like the
   Node job it has **no `pull_request` trigger** and no write mode.
+- `eol-policy-drift.yml` runs **daily** and **fails** when an organisation-wide CI version
+  variable names a release cycle that has reached end of life, does not exist for its
+  product, sits outside the window `.github/eol-policy.conf` bounds it to, or omits a
+  supported cycle inside that window. Daily rather than weekly because a cycle reaching
+  end of life is dated. The values arrive **from the Actions `vars` context, not the
+  API** — reading organisation variables needs a fine-grained PAT whose resource owner is
+  the organisation, and the `vars` context needs no token at all — so every variable in
+  the policy needs a matching `env:` line in the workflow, and **unset or empty is a
+  failure, never a pass**. `--from-api` is the laptop exception and does need that
+  organisation-owned token. Java's product is selected indirectly, through
+  `RTLDEV_MW_CI_JAVA_DISTRO` and `POLICY_PRODUCT_MAP`; an unmapped value is a failure,
+  never a default, because a default measures one vendor's dates against another vendor's
+  toolchain. Like the other two, **no `pull_request` trigger** and no write mode.
 - **Devcontainer:** the frame is in `.devcontainer/`; shared behaviour comes from the
   `devbase` Feature by version. Never fork its scripts here. No language runtimes are
   installed — that is a decision, not an omission (see README).
