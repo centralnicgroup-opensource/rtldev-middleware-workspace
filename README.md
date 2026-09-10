@@ -192,6 +192,8 @@ download of repositories the session may never touch.
 | `scripts/node-policy.sh`            | Reports repositories whose Node/npm/pnpm declaration has drifted     |
 | `.github/node-policy.conf`          | The one Node toolchain every repository is meant to declare          |
 | `scripts/deploykey-policy.sh`       | Reports repositories whose deploy-key release trait is wrong         |
+| `scripts/eol-policy.sh`             | Reports CI toolchain versions that have reached end of life          |
+| `.github/eol-policy.conf`           | The CI version variables checked, and what each is checked against   |
 | `repos/<namespace>/`                | The submodule checkouts. Nothing in here is edited from here         |
 | `.github/workflows/quality.yml`     | Prettier, actionlint, shellcheck, and the register consistency check |
 | `.github/workflows/repos-drift.yml` | Weekly: has a new repository appeared that is not registered?        |
@@ -410,6 +412,96 @@ with literal string comparison each of them is drift until a commit lands in tha
 repository. A weekly job that is red for something this repository cannot fix is a job
 nobody reads, so RSRMID-3036 widens the script and the workflow together, after finding
 out what the drift actually is.
+
+### The CI toolchain EOL policy
+
+Every workflow in the organisation reads its Node, Go, Java, Python, PHP and runner
+version out of one set of GitHub Actions **organisation variables**, so a toolchain
+reaching end of life is a single value going stale in one place rather than a change to
+any repository here. `.github/eol-policy.conf` names those variables, the
+[endoflife.date](https://endoflife.date) product each is measured against and the window
+of release cycles it may sit in; [eol-policy-drift.yml](.github/workflows/eol-policy-drift.yml)
+checks them daily. This replaces the check `rtldev-middleware-gh-actions-endoflife` ran
+from its own `check-custom-vars.yml` — the values did not move, only the checking did.
+
+```sh
+pnpm eol:policy --from-api                          # report drift everywhere
+pnpm eol:policy --from-api --verbose                # and list the variables that are clean
+pnpm eol:policy --from-api RTLDEV_MW_CI_PHP_MATRIX  # only the variables named
+```
+
+**The workflow passes the values in; it does not fetch them.** They come from the Actions
+`vars` context, which GitHub populates for the job with no token scope at all. Reading the
+same values through the API needs a fine-grained PAT whose _resource owner_ is the
+organisation — a personal-account token cannot reach organisation variables however much
+repository access it holds — so fetching would have given a job that needs no credential a
+dependency on one of the hardest credentials here to obtain. `--from-api` exists so the
+script can be run from a laptop without copying values by hand, and it is the exception:
+it needs exactly that organisation-owned token. Without it the values have to be in the
+environment already, which is what the workflow does.
+
+The cost of passing them in is that every variable named in the policy needs a matching
+`env:` line in the workflow, including `RTLDEV_MW_CI_JAVA_DISTRO`, which holds no version
+but selects a product. A name in the policy with no line there arrives **unset** — and an
+unset or empty variable is a **failure, never a pass**. A variable renamed at the
+organisation level would otherwise arrive as a blank string and read as "nothing to
+check", which is the silent-pass hazard the registers exist to prevent, reached through
+the environment instead.
+
+Three things count as drift, all of them inherited from the action this replaces, because
+reporting only the first would miss most of the value:
+
+| Category | Means                                                                         |
+| -------- | ----------------------------------------------------------------------------- |
+| invalid  | the cycle does not exist for that product, or falls outside the policy window |
+| eol      | the cycle has reached end of life, reported with the date                     |
+| newer    | a supported cycle inside the window that the variable does not name           |
+
+The exit status separates the two things a red run can mean: 0 clean, 1 drift, 2 could not
+run — an unreadable product, an unresolvable selector or a stale bound, none of which is a
+statement about a version. One unreachable product never decides that the other variables
+go unchecked.
+
+Whether a variable is a matrix or a single version is **inferred from its value**, never
+declared — declaring it twice would let the two disagree — and the two are reported
+differently. A matrix is reported for every supported cycle in the window it does not
+name; a single version only when the missing cycle is _newer_, so deliberately sitting on
+an older but still supported release is not flagged for ever. The literal `latest` always
+passes without an API call.
+
+**Java names its product indirectly**, as `@RTLDEV_MW_CI_JAVA_DISTRO`, resolved through
+`POLICY_PRODUCT_MAP`. The distribution is itself an organisation variable and the vendors
+do not share a calendar, so a product pinned in the policy would start measuring the wrong
+vendor's dates the moment that variable moved — which had already happened: the java rows
+read `oracle-jdk` while the variable said `temurin`. The map is a table rather than a rule
+because the two sides spell the same vendor differently (`temurin` against
+`eclipse-temurin`) and only one of the sixteen distributions `setup-java` installs spells
+it the same on both sides. A value with no line in the map is a **failure**, with no
+default and no nearest match: a plausible answer from the wrong vendor is precisely what
+the indirection exists to stop.
+
+Every `MIN_CYCLE`/`MAX_CYCLE` bound in the policy records **why it is there**, and `-` is
+the normal answer for either. A ceiling is a constraint imposed from outside — the PHP
+_version_ is pinned to exactly 8.3 because WHMCS 8 supports nothing above it, Node stops
+at 24 because our devcontainers run LTS — never a preference, because adding one to
+silence a report turns the job into something that tells you what you already told it. A
+floor is ours to choose and says where we stopped testing: Java starts at 17 because
+`java-sdk`'s `pom.xml` compiles to 17, so without it the check would report 8 and 11 as
+cycles the matrix ought to name. A bound with no recorded reason is the kind of thing the
+next person deletes as tidying.
+
+The PHP rows are worth reading before touching either: the two variables answer different
+questions, and treating the matrix as a WHMCS question is what once made 8.4 and 8.5 look
+like drift. The single version is what every module must run on, so WHMCS caps it. The
+matrix is a test-automation input belonging to the projects WHMCS does not constrain, so
+it is floored at 8.3 and deliberately left open above.
+
+It runs **daily**, unlike the weekly drift jobs, because a cycle reaching end of life is
+dated and a weekly check could sit on the news for six days. Like them it has no
+`pull_request` trigger — the drift is a version somebody else controls, which no commit
+here can fix — and no write mode at all: moving to a newer cycle is a change to the
+organisation variable and to the repositories that follow it, not something a drift job
+should do on anyone's behalf.
 
 CI never checks out the submodules. Their code is gated by their own CI; re-linting it
 here would duplicate that and fail on findings this repository cannot fix. For the same
