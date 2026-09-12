@@ -1,7 +1,7 @@
 [submodule "repos/centralnicgroup-opensource/rtldev-middleware-blesta"]
 	path = repos/centralnicgroup-opensource/rtldev-middleware-blesta
 	url = https://github.com/centralnicgroup-opensource/rtldev-middleware-blesta.git
-	branch = master
+	branch = main
 [submodule "repos/centralnicgroup-opensource/rtldev-middleware-devcontainer-features"]
 	path = repos/centralnicgroup-opensource/rtldev-middleware-devcontainer-features
 	url = https://github.com/centralnicgroup-opensource/rtldev-middleware-devcontainer-features.git
