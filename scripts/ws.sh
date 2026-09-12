@@ -133,7 +133,13 @@ ws_status_row() {
     *) state="${C_GRN}ok${C_OFF}" ;;
   esac
 
-  upstream="-"
+  # A detached checkout has no upstream by construction — that is what `sync` leaves
+  # behind, and the BRANCH column already says so, which is why it keeps the neutral `-`.
+  # A checkout *on a branch* with no upstream is the anomaly: the remote-tracking ref it
+  # followed is gone, which is what a branch renamed on GitHub looks like here once a
+  # fetch has pruned it. Printing `-` for that too is what let a stale branch record read
+  # as a clean row for a day. This is the display half only — `ws.sh add` is what actually
+  # reconciles the record against GitHub.
   if git -C "$dir" rev-parse --abbrev-ref '@{upstream}' >/dev/null 2>&1; then
     counts="$(git -C "$dir" rev-list --left-right --count '@{upstream}...HEAD' 2>/dev/null)"
     behind="${counts%%[[:space:]]*}"
@@ -143,6 +149,10 @@ ws_status_row() {
     else
       upstream="${C_YEL}+${ahead}/-${behind}${C_OFF}"
     fi
+  elif [ "$branch" = "(detached)" ]; then
+    upstream="-"
+  else
+    upstream="${C_YEL}no upstream${C_OFF}"
   fi
 
   # The %-Ns padding is computed against the colour codes too, so the columns would skew;
@@ -501,8 +511,9 @@ cmd_pin() {
 
 # --- add ---------------------------------------------------------------------
 # Reconciles the register against GitHub: reports repositories that exist there but are
-# not registered here, and registered entries that no longer qualify (archived, made
-# private, renamed or deleted).
+# not registered here, registered entries that no longer qualify (archived, made private,
+# renamed or deleted), and registered entries whose recorded branch is no longer the
+# repository's default.
 #
 # Registration writes the .gitmodules entry and the gitlink directly, from
 # `git ls-remote` — it does NOT clone. `git submodule add` would clone the repository
@@ -532,10 +543,32 @@ cmd_add() {
   local registered_paths
   registered_paths="$(ws_registered_paths)"
 
-  local new=() gone=() org full branch path line
+  local new=() gone=() rebranch=() org full branch path line recorded
   while IFS=$'\t' read -r org full branch; do
     [ -n "$full" ] || continue
-    printf '%s\n' "$registered_paths" | grep -qxF "repos/$org/$full" || new+=("$org	$full	$branch")
+    path="repos/$org/$full"
+    if ! printf '%s\n' "$registered_paths" | grep -qxF "$path"; then
+      new+=("$org	$full	$branch")
+      continue
+    fi
+    # The branch half of the same reconciliation. Every other check reads the register's
+    # own internal consistency, so a row can be perfect in every way anything looks at it
+    # while naming a branch GitHub renamed away underneath it — invisible until someone
+    # runs `ws.sh pull` and gets one skip, for one repository, with a raw git message.
+    #
+    # It costs nothing to ask: default_branch arrives in the same discovery rows the name
+    # check is already made from, so no extra request, no clone and no new credential. It
+    # is also the value registration writes below for a new row — so treating it as
+    # authoritative here changes nothing about what the register means. It only keeps
+    # asking the question after the day the row was added, which is the whole gap.
+    #
+    # A repository deliberately tracked on something other than its default branch would
+    # need a way to say so, and would stop this being a one-value comparison. There is no
+    # such row: every entry matches its repository's default branch. The opt-out gets
+    # invented when the case that needs it turns up — a column nothing ever sets is a
+    # column nobody notices being set wrongly.
+    recorded="$(git config --file .gitmodules --get "submodule.$path.branch" 2>/dev/null)"
+    [ "$recorded" = "$branch" ] || rebranch+=("$path	${recorded:-(unrecorded)}	$branch")
   done <<<"$discovered"
 
   while IFS= read -r line; do
@@ -548,6 +581,12 @@ cmd_add() {
       "$C_YEL" "${#gone[@]}" "$C_OFF"
     printf '  %s\n' "${gone[@]}"
     printf '  Remove manually: git rm <path> && git config --file .gitmodules --remove-section submodule.<path>\n'
+  fi
+
+  if [ "${#rebranch[@]}" -gt 0 ]; then
+    printf '%s%d registered repo(s) record a branch that is no longer the default:%s\n' \
+      "$C_YEL" "${#rebranch[@]}" "$C_OFF"
+    printf '%s\n' "${rebranch[@]}" | awk -F'\t' '{printf "  %-56s %s -> %s\n", $1, $2, $3}'
   fi
 
   # An exclusion that matches nothing is a row about a repository that has been renamed or
@@ -563,19 +602,38 @@ cmd_add() {
     ws_warn "$(basename "$WS_EXCLUDE") names ${#stale[@]} repo(s) that no longer exist: ${stale[*]}"
   fi
 
-  if [ "${#new[@]}" -eq 0 ]; then
+  if [ "${#new[@]}" -eq 0 ] && [ "${#rebranch[@]}" -eq 0 ]; then
     ws_info "register is up to date: $(printf '%s\n' "$registered_paths" | grep -c .) repositories"
     return 0
   fi
 
-  printf '%s%d repo(s) on GitHub are not registered:%s\n' "$C_BLD" "${#new[@]}" "$C_OFF"
-  printf '%s\n' "${new[@]}" | awk -F'\t' '{print "  " $1 "/" $2}'
-  printf '  Not wanted here? Declare it in %s with a reason instead.\n' "${WS_EXCLUDE#"$WS_ROOT"/}"
+  if [ "${#new[@]}" -gt 0 ]; then
+    printf '%s%d repo(s) on GitHub are not registered:%s\n' "$C_BLD" "${#new[@]}" "$C_OFF"
+    printf '%s\n' "${new[@]}" | awk -F'\t' '{print "  " $1 "/" $2}'
+    printf '  Not wanted here? Declare it in %s with a reason instead.\n' "${WS_EXCLUDE#"$WS_ROOT"/}"
+  fi
 
   if [ "$apply" -eq 0 ]; then
-    ws_info "re-run with --apply to register them"
+    if [ "${#new[@]}" -eq 0 ]; then
+      ws_info "re-run with --apply to correct the branch record(s)"
+    elif [ "${#rebranch[@]}" -eq 0 ]; then
+      ws_info "re-run with --apply to register them"
+    else
+      ws_info "re-run with --apply to register them and correct the branch record(s)"
+    fi
     return 0
   fi
+
+  # The branch records first, and on their own: this rewrites one field of a row that is
+  # right in every other respect, and deliberately leaves the gitlink where it is.
+  # Re-resolving the pin here would be a pin bump smuggled inside a register fix, and a
+  # pin bump is its own deliberate step — `ws.sh pull`, then `ws.sh pin`.
+  local recpath oldb newb
+  for line in "${rebranch[@]+"${rebranch[@]}"}"; do
+    IFS=$'\t' read -r recpath oldb newb <<<"$line"
+    git config --file .gitmodules "submodule.$recpath.branch" "$newb"
+    printf '  retracked %-56s %s -> %s\n' "$recpath" "$oldb" "$newb"
+  done
 
   local sha url
   while IFS=$'\t' read -r org full branch; do
@@ -600,10 +658,14 @@ cmd_add() {
     # it directly is what lets registration stay clone-free.
     git update-index --add --cacheinfo "160000,$sha,$path"
     printf '  registered %-26s %-40s %s @ %s\n' "$org" "$(ws_short_name "$full")" "$branch" "${sha:0:8}"
-  done < <(printf '%s\n' "${new[@]}")
+  done < <(printf '%s\n' "${new[@]+"${new[@]}"}")
 
   git add .gitmodules
-  ws_info "staged. Populate with ./scripts/ws.sh sync, commit with: git commit -m 'feat(repos): register new repositories'"
+  if [ "${#new[@]}" -gt 0 ]; then
+    ws_info "staged. Populate with ./scripts/ws.sh sync, commit with: git commit -m 'feat(repos): register new repositories'"
+  else
+    ws_info "staged. Commit with: git commit -m 'fix(repos): track <repo> on <branch>', then ./scripts/ws.sh pull <repo>"
+  fi
   ws_report_failures
 }
 
