@@ -1,7 +1,8 @@
 ---
 # Reports rtldev-middleware-* repositories that exist in either namespace but are in
-# neither register here — and registered ones that have since been archived, excluded,
-# renamed or deleted.
+# neither register here — registered ones that have since been archived, excluded,
+# renamed or deleted, and registered ones whose recorded branch is no longer the
+# repository's default branch.
 #
 # This is the failure mode that makes a workspace quietly wrong rather than broken: a
 # new repository is created, nobody adds it here, and every subsequent "apply this to
@@ -57,6 +58,14 @@ jobs:
           # to decide. Unregistered repositories fail the run; that is the whole signal.
           if grep -q 'are not registered' register.txt; then
             echo "::error::New repositories are missing from the register. Run ./scripts/ws.sh add --apply and commit."
+            exit 1
+          fi
+          # A stale branch record fails rather than warns: unlike an archived or renamed
+          # repository it needs no decision about what should happen to it, the fix is one
+          # command in this repository, and left alone it breaks `ws.sh pull` for that
+          # repository while every other check keeps passing.
+          if grep -q 'record a branch that is no longer the default' register.txt; then
+            echo "::error::A submodule's recorded branch is no longer its default branch. Run ./scripts/ws.sh add --apply and commit."
             exit 1
           fi
           if grep -q 'no longer qualify' register.txt; then

@@ -42,6 +42,14 @@ register lives in [.gitmodules](.gitmodules) and is reconciled against GitHub by
 [repos-drift.yml](.github/workflows/repos-drift.yml), which fails when a repository exists
 in either namespace and is in neither register.
 
+Each row also records the branch that repository is tracked on, because that is genuinely
+not uniform here: the older repositories are on `master` and the newer ones on `main`.
+`add` reconciles that field too, against the default branch GitHub reports — the same
+value it writes when it first registers a row, so nothing in the register means anything
+different, it is simply asked again. A repository deliberately tracked on something other
+than its default branch would need a way to say so; there is no such row today, and the
+opt-out gets invented when the case that needs it turns up.
+
 Checkouts live at `repos/<namespace>/<full-repository-name>`:
 
 ```
