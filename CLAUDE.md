@@ -185,6 +185,14 @@ of `npx` for a package that is genuinely not a dependency.
   `RTLDEV_MW_CI_JAVA_DISTRO` and `POLICY_PRODUCT_MAP`; an unmapped value is a failure,
   never a default, because a default measures one vendor's dates against another vendor's
   toolchain. Like the other two, **no `pull_request` trigger** and no write mode.
+- `devbase-policy-drift.yml` runs weekly and **fails** when a repository's devcontainer
+  does not declare the `devbase` Feature at the current major, or still commits a
+  leftover of the frame it replaces (`.zshrc`, `.czrc`, `.p10k.zsh`, a Dockerfile still
+  cloning `powerlevel10k`/`zsh-autosuggestions`, …) — the RSRMID-3019 failure mode, caught
+  by a job at last. Spans both namespaces, needs no register, and a missing
+  `devcontainer-lock.json` is a warning rather than a failure, since only an actual
+  container rebuild can produce one. Like the others, **no `pull_request` trigger** and
+  no write mode.
 - **Devcontainer:** the frame is in `.devcontainer/`; shared behaviour comes from the
   `devbase` Feature by version. Never fork its scripts here. No language runtimes are
   installed — that is a decision, not an omission (see README).
