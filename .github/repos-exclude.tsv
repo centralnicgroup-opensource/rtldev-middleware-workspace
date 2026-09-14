@@ -14,8 +14,14 @@
 #   here                  not part of this workspace at all — out of .gitmodules, and out
 #                         of the settings register's coverage question too.
 #   profile `exclude`     ours, checked out as a submodule, settings deliberately
-#                         unmanaged. dnscontrol is the case: we want the checkout, and its
-#                         settings belong to the upstream project we forked.
+#                         unmanaged — the code is wanted locally, the settings belong to
+#                         the upstream project it was forked from.
+#
+# dnscontrol used to be the profile `exclude` case, on the grounds that we wanted the
+# checkout. We did not: it was registered for years and never once populated, and the only
+# thing anyone does with that fork is send it a pull request now and then. It moved here on
+# RSRMID-3068. That leaves profile `exclude` with no user — kept rather than removed,
+# because it is still the right answer the day we fork something we do develop against.
 #
 # Nothing needs a row here to be left out for being archived or for being this repository
 # itself — those are answered by ws_discover in scripts/repos.sh, not by a decision
@@ -26,6 +32,17 @@
 # so a decision can be declared before the namespace goes live. `ws.sh add` warns about a
 # row it could not match in a namespace it *did* query, which is how a repository that has
 # since been renamed or deleted stops being silently vouched for.
+
+# --- centralnicgroup-opensource ----------------------------------------------
+# A fork of StackExchange/dnscontrol, carried so we can send the upstream project the
+# occasional pull request. Nothing here develops against it: it was a registered submodule
+# from the start and `ws.sh status` never once reported it as anything but empty, so the
+# checkout the register promised was never taken.
+#
+# Its settings are no more ours to hold an opinion about than its package.json is — which
+# is why .github/node-policy.conf names it in POLICY_EXCLUDE as well. That row stays: the
+# Node job needs no register and does not read this file, so this row does not cover it.
+centralnicgroup-opensource	rtldev-middleware-dnscontrol	third-party fork of StackExchange/dnscontrol; we only forward pull requests to it
 
 # --- centralnicgroup ---------------------------------------------------------
 # Three of the four active rtldev-middleware-* repositories in that namespace; whmcs-src is

@@ -6,10 +6,6 @@
 	path = repos/centralnicgroup-opensource/rtldev-middleware-devcontainer-features
 	url = https://github.com/centralnicgroup-opensource/rtldev-middleware-devcontainer-features.git
 	branch = main
-[submodule "repos/centralnicgroup-opensource/rtldev-middleware-dnscontrol"]
-	path = repos/centralnicgroup-opensource/rtldev-middleware-dnscontrol
-	url = https://github.com/centralnicgroup-opensource/rtldev-middleware-dnscontrol.git
-	branch = master
 [submodule "repos/centralnicgroup-opensource/rtldev-middleware-dnscontrol-dnsconfig"]
 	path = repos/centralnicgroup-opensource/rtldev-middleware-dnscontrol-dnsconfig
 	url = https://github.com/centralnicgroup-opensource/rtldev-middleware-dnscontrol-dnsconfig.git
