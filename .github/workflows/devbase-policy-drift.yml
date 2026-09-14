@@ -1,0 +1,70 @@
+---
+# Reports when any rtldev-middleware-* repository's devcontainer is not using the shared
+# devbase Feature, at the current major, with none of the hand-maintained frame it
+# replaces still committed.
+#
+# Nothing checked this before RSRMID-3073, and RSRMID-3019 is what that cost: five
+# repositories carried a commit titled "build(devcontainer): migrate onto the shared
+# devbase Feature" that added exactly two files and declared the Feature in neither of
+# them. It went unnoticed for two weeks and was found by reading repositories one at a
+# time by hand — a commit subject is not evidence its diff did what it says.
+#
+# Like its sibling policy jobs, this one needs no register to be complete: it enumerates
+# from both organisations and checks every repository, so one nobody registered is
+# checked from the moment it exists. A repository with no .devcontainer/devcontainer.json
+# at all is reported and counted rather than skipped in silence.
+#
+# Read-only by construction — scripts/devbase-policy.sh has no write mode at all.
+# Bringing a repository into line is a commit in that repository, where the change gets
+# the review a devcontainer rebuild deserves.
+name: Devbase policy drift
+
+on:
+  schedule:
+    # Monday morning, behind the settings (06:00), register (06:30), Node (07:00) and
+    # deploy-key (07:30) jobs so five failures do not arrive as one indistinguishable
+    # batch.
+    - cron: "0 8 * * 1"
+  workflow_dispatch:
+
+# No pull_request trigger, matching the three sibling drift jobs. It fails on the state of
+# *other* repositories' devcontainers, which no pull request here can fix, so a PR trigger
+# would make this repository's pull requests red for reasons they do not own. Run it by
+# hand (workflow_dispatch, or scripts/devbase-policy.sh locally) when changing the policy.
+
+permissions:
+  contents: read
+
+jobs:
+  drift:
+    name: Devbase policy drift
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      # GITHUB_TOKEN is scoped to THIS repository, so it cannot read another
+      # repository's devcontainer.json at all — every check would report "could not
+      # read .devcontainer" and the job would be uniformly, meaninglessly red.
+      # RTLDEV_MW_CI_TOKEN and RTLDEV_MW_CI_TOKEN_CNG read across their own organisation,
+      # which is all this needs; neither ever writes anywhere.
+      #
+      # Both namespaces, unlike node-policy-drift.yml (scoped to centralnicgroup-opensource
+      # alone, deliberately, per RSRMID-3036). There is no equivalent reason to hold this
+      # one back: a devcontainer either declares the Feature at the right major with
+      # nothing left over, or it does not, and that question is as answerable for a
+      # centralnicgroup repository as for an opensource one.
+      #
+      # The fallback to GITHUB_TOKEN is deliberate, but it is NOT what makes this safe: that
+      # token can still read *public* repositories in either organisation, so a rotated or
+      # missing RTLDEV_MW_CI_TOKEN would not fail loudly here — every private and internal
+      # repository would simply be absent from a run that still looked complete. What
+      # actually catches that is scripts/devbase-policy.sh's own credential self-test,
+      # ws_assert_discovery_covers_registers, called right after discovery: it fails the
+      # run whenever a registered repository is missing from what GitHub returned, and a
+      # public-only token is exposed by missing exactly the private and internal ones.
+      - name: Check every repository against .github/devbase-policy.conf
+        env:
+          WS_TOKEN_CENTRALNICGROUP_OPENSOURCE: ${{ secrets.RTLDEV_MW_CI_TOKEN }}
+          WS_TOKEN_CENTRALNICGROUP: ${{ secrets.RTLDEV_MW_CI_TOKEN_CNG }}
+          GH_TOKEN: ${{ secrets.RTLDEV_MW_CI_TOKEN || secrets.GITHUB_TOKEN }}
+        run: scripts/devbase-policy.sh --verbose

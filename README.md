@@ -202,6 +202,8 @@ download of repositories the session may never touch.
 | `scripts/deploykey-policy.sh`       | Reports repositories whose deploy-key release trait is wrong         |
 | `scripts/eol-policy.sh`             | Reports CI toolchain versions that have reached end of life          |
 | `.github/eol-policy.conf`           | The CI version variables checked, and what each is checked against   |
+| `scripts/devbase-policy.sh`         | Reports repositories whose devcontainer is not on devbase, cleanly   |
+| `.github/devbase-policy.conf`       | The devbase major expected, and the leftover frame it must replace   |
 | `repos/<namespace>/`                | The submodule checkouts. Nothing in here is edited from here         |
 | `.github/workflows/quality.yml`     | Prettier, actionlint, shellcheck, and the register consistency check |
 | `.github/workflows/repos-drift.yml` | Weekly: has a new repository appeared that is not registered?        |
@@ -515,6 +517,85 @@ CI never checks out the submodules. Their code is gated by their own CI; re-lint
 here would duplicate that and fail on findings this repository cannot fix. For the same
 reason `repos/` is the first entry in [.prettierignore](.prettierignore) — each of those
 repositories has its own prettier config and formatting history.
+
+### The devbase coverage policy
+
+Every devcontainer in the organisation is meant to declare the shared `devbase` Feature,
+at the current major, with none of the frame it replaces still committed.
+[devbase-policy-drift.yml](.github/workflows/devbase-policy-drift.yml) checks weekly.
+Nothing checked that until RSRMID-3073, and RSRMID-3019 is what the gap cost: five repositories carried a
+commit titled `build(devcontainer): migrate onto the shared devbase Feature` that added
+exactly two files and declared the Feature in neither of them. It sat unnoticed for two
+weeks and was found by reading repositories one at a time by hand — a commit subject is
+not evidence its diff did what it says, which is precisely what a drift job is for.
+
+```sh
+pnpm devbase:policy            # report drift everywhere
+pnpm devbase:policy --verbose  # and list the repositories that are clean
+```
+
+Three things count as drift: **no devbase declaration at all** (the RSRMID-3019 failure,
+exactly, including a reference with no tag or one pinned by digest — both wire the Feature
+in, so each gets its own message rather than the RSRMID-3019 wording), **a major other
+than the one the policy names**, and **a leftover of the hand-maintained frame still
+committed** — `.zshrc`, `.czrc`, `.p10k.zsh`, `p10k-instant-prompt-vscode.zsh`, or a
+Dockerfile (at any depth under `.devcontainer/`, matched on the last path segment, exactly
+like the leftover files) still cloning `powerlevel10k` or `zsh-autosuggestions` itself. The
+major and both leftover lists are read straight from `.github/devbase-policy.conf` rather
+than hardcoded; the Feature's own identity (which Feature, published where) is not — it is
+built in the script itself from `WS_ORG_OPENSOURCE`, never a literal organisation name.
+That third check is the one that would actually have caught RSRMID-3019's shape of failure
+if it had been a half-migration instead of no migration: a repository can declare the
+Feature and keep the frame it was supposed to retire, and declaring it is not evidence of
+having removed anything.
+
+Comparison is literal string equality throughout, matching `node-policy.conf`'s reasoning
+exactly: `grep -c 'devbase:1'` also matches `devbase:10`, the same class of bug
+`deploykey-policy.sh` documents for `@semantic-release/git` being a prefix of
+`@semantic-release/github`. The whole token after `devbase:` is captured and compared
+whole, never matched as a substring.
+
+`devcontainer.json` is JSONC, and every repository's comments mention "devbase" in prose
+constantly — this workspace's own file says it two times before ever reaching the
+`features` key (five in the whole file). Whole-line comments are stripped before anything
+is parsed, so a commented-out or merely-discussed reference is never read as a declaration.
+
+A repository with no `.devcontainer/devcontainer.json` at all — `blesta`, `whmcs` and
+`shareable-workflows` today — is reported and counted, never treated as drift: there is
+nothing here for the policy to have an opinion about. A repository using a layout this
+does not read at all — a root `.devcontainer.json`, or the multi-configuration layout
+(`.devcontainer/<folder>/devcontainer.json`) — is a different thing again: it fails closed
+as unverified rather than joining that bucket, because "we have no opinion" would be false
+of it. **No committed `devcontainer-lock.json` is a warning, never a failure**, reported
+prominently with exit status 0: without one, the declared major re-resolves to its newest
+patch on every rebuild, which is worth knowing — but a lock file can only be produced by an
+actual container rebuild, something CI cannot do, so failing on it would leave the job
+permanently red for work nobody here can perform.
+
+It enumerates from **both** namespaces via `ws_discover_all`, and consults
+`repos-exclude.tsv` through `ws_is_excluded` for repositories not part of this workspace at
+all — `mcp-dis` is excluded there as a third-party fork, and is why that path is exercised
+rather than assumed; its `repos-exclude.tsv` row says nothing about `devbase`, only that it
+is a fork, so that is as much as this can claim about it. `.github/devbase-policy.conf`'s
+own `POLICY_EXCLUDE` is a second, narrower exception list, for a repository this workspace
+does manage but this policy specifically should not judge; empty today.
+
+Coverage does not depend on either register — every repository in scope is checked from
+the moment it exists in the organisation, register row or not — but the run does now guard
+its own credentials against both registers before checking anything: a malformed register
+aborts before discovery, and `ws_assert_discovery_covers_registers` afterwards fails the
+run if a registered repository is missing from what GitHub returned, which is the only way
+a namespace whose token has gone stale or been rotated out would ever be caught rather than
+silently checking nothing for it.
+
+Enumerating from the organisation rather than `repos/` is not a preference here, it is a
+requirement discovered while writing the check: a locally pinned submodule can be behind
+what GitHub actually holds, and reading the working tree would have reported a
+repository's devcontainer as unmigrated when the repository itself had already moved on.
+
+Read-only, with no write mode at all, like every policy script here. Bringing a
+repository into line is a devcontainer rebuild and a commit in that repository's own
+history and review, never a bulk apply from this one.
 
 ## Committing in this repository
 
