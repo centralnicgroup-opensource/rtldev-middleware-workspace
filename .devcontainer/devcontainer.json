@@ -40,9 +40,21 @@
     // The shared behaviour layer: zsh with the team prompt, commitizen, pnpm, the gh
     // credential helper, persistent shell history, dependency installation, the
     // on-attach banner, and the RTK binary the committed .claude/settings.json hook
-    // looks for. It pulls in Node LTS, the GitHub CLI and the Claude Code CLI as its
-    // own Feature dependencies, so none of the three is listed here.
-    "ghcr.io/centralnicgroup-opensource/rtldev-middleware-devcontainer-features/devbase:1": {}
+    // looks for. It pulls in Node LTS and the GitHub CLI as its own Feature
+    // dependencies, so neither is listed here.
+    //
+    // The Claude Code CLI was a third until devbase 2.0.0 dropped it (RSRMID-3053): the
+    // VS Code extension ships and runs its own runtime, so the npm-installed global was
+    // a second copy of the same thing — and one that could not update itself, since it
+    // installs as root into a global npm tree the node feature makes vscode:nvm, leaving
+    // `claude update` broken until someone chowned it by hand. The two Claude extensions
+    // are unaffected, and RTK is unaffected: its PreToolUse hook lives in the
+    // bind-mounted ~/.claude/settings.json and fires under the extension's runtime
+    // exactly as it did under the CLI's.
+    //
+    // Moving from :1 to :2 is deliberate and manual by design — a consumer pinning :1
+    // never sees a 2.x release on a rebuild, which is the whole point of the major tag.
+    "ghcr.io/centralnicgroup-opensource/rtldev-middleware-devcontainer-features/devbase:2": {}
   },
 
   "remoteUser": "vscode",
