@@ -1,5 +1,14 @@
 {
   "features": {
+    "ghcr.io/centralnicgroup-opensource/rtldev-middleware-devcontainer-features/devbase:2": {
+      "version": "2.0.1",
+      "resolved": "ghcr.io/centralnicgroup-opensource/rtldev-middleware-devcontainer-features/devbase@sha256:e8360f895365f54d8e769ca5be45b7919b2a640ac3cc51ae2a4a8b04531881c6",
+      "integrity": "sha256:e8360f895365f54d8e769ca5be45b7919b2a640ac3cc51ae2a4a8b04531881c6",
+      "dependsOn": [
+        "ghcr.io/devcontainers/features/node:2",
+        "ghcr.io/devcontainers/features/github-cli:1"
+      ]
+    },
     "ghcr.io/devcontainers/features/github-cli:1": {
       "version": "1.1.1",
       "resolved": "ghcr.io/devcontainers/features/github-cli@sha256:94879eebb6a0e4e2f197de9f12db7427cb4a25b82d93c55239ce8c8fc394a1b4",
