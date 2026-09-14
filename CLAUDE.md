@@ -31,7 +31,9 @@ tooling and pinned commits, never product source.
   with a reason, what is deliberately in neither — sandboxes, websites, third-party forks.
   None is derivable from another; do not try to merge them. Note that the `exclude`
   _profile_ in `_register.tsv` is a fourth, different thing: "ours, checked out, settings
-  deliberately unmanaged", which is what `dnscontrol` is.
+  deliberately unmanaged". It has no row today — `dnscontrol` was the one, and RSRMID-3068
+  moved it out of the workspace altogether, into `repos-exclude.tsv` — but the profile
+  stays for the day we fork something we do develop against.
 - **Visibility is not a filter any more.** Both registers cover the private and internal
   repositories. A repository that releases over a deploy key needs its ruleset managed
   whether or not the public can read it.

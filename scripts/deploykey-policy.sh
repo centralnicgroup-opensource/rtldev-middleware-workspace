@@ -51,10 +51,9 @@
 #      and correctly carries no trait. So the plugins array is parsed and its entries are
 #      compared with string equality. Nothing here greps a config file.
 #
-#   2. Enumerate from GitHub, not from repos/. `ws.sh status` reports whmcs and dnscontrol
-#      as empty — whmcs deliberately, at 2 GB — so a check reading working trees would
-#      silently skip 2 of the 15 checked-out repositories, whmcs among them, and whmcs is
-#      the one repository the deploy-key signal exists for.
+#   2. Enumerate from GitHub, not from repos/. `ws.sh status` reports whmcs as empty —
+#      deliberately, at 2 GB — so a check reading working trees would silently skip it,
+#      and whmcs is the one repository the deploy-key signal exists for.
 #
 # SCOPE: GITHUB *AND* THE REGISTER
 #
@@ -487,7 +486,9 @@ for name in "${TARGETS[@]}"; do
   PROFILE="$(ws_register_profile "$name")" || PROFILE=""
 
   # An excluded repository takes no settings from here at all, so it has no bypass to
-  # lose and no trait to be missing. dnscontrol is a fork of someone else's project.
+  # lose and no trait to be missing. No row carries the profile today — dnscontrol, which
+  # did, left the workspace outright on RSRMID-3068 and is caught by the repos-exclude.tsv
+  # check above instead — but the branch stays for the next fork we do check out.
   if [ "$PROFILE" = "exclude" ]; then
     SKIPPED_EXCLUDED=$((SKIPPED_EXCLUDED + 1))
     [ "$VERBOSE" -eq 1 ] && printf '%-46s excluded by the register\n' "$name"

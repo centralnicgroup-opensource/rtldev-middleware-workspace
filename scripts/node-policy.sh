@@ -23,10 +23,10 @@
 #
 # WHY THIS READS GITHUB RATHER THAN repos/
 #
-# A check that walked the checkouts would be wrong, not merely incomplete. template,
-# whmcs and dnscontrol are registered submodules that are usually unpopulated, so they
-# read as "no package.json" when two of them have one; and workspace and the archived
-# semantic-release-whmcs have no submodule entry at all. Enumerating from the
+# A check that walked the checkouts would be wrong, not merely incomplete. template and
+# whmcs are registered submodules that are not always populated — whmcs deliberately, at
+# 2 GB — so template reads as "no package.json" when it has one; and workspace and the
+# archived semantic-release-whmcs have no submodule entry at all. Enumerating from the
 # organisation and reading package.json over the contents API is the only way to get the
 # same answer from a laptop and from CI.
 #

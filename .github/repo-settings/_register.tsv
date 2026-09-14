@@ -14,7 +14,11 @@
 # profile is one of:
 #   customer-facing   ships software our customers use — issues on
 #   internal          department tooling — issues off
-#   exclude           deliberately not managed here; the note says why
+#   exclude           ours, checked out here, settings deliberately not managed; the note
+#                     says why. No row carries it today — dnscontrol, which did, is out of
+#                     the workspace entirely since RSRMID-3068 and now has a row in
+#                     .github/repos-exclude.tsv instead. Not the same thing as a row in
+#                     that file: this profile keeps the checkout, that file gives it up.
 #
 # and may be followed, comma-separated, by any number of trait profiles that cut across
 # that split. Applied left to right, so the rightmost wins on a conflict:
@@ -126,8 +130,3 @@ centralnicgroup	rtldev-middleware-whmcs-src	internal,releases-via-deploykey	unen
 # public-only. Both are on RSRMID-3050 rather than fixed here, because they are commits
 # in that repository.
 centralnicgroup	rtldev-middleware-blesta-dev	internal,releases-via-deploykey	internal source for the Blesta integration; release identity in place, pipeline still to come (TEMPLATE-SETUP.md still present)
-
-# --- Excluded ----------------------------------------------------------------
-# A fork of StackExchange/dnscontrol. Its settings are not ours to hold an opinion
-# about, and applying the baseline would fight the upstream repository's own shape.
-centralnicgroup-opensource	rtldev-middleware-dnscontrol	exclude	3rd-party fork

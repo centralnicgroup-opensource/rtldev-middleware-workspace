@@ -347,8 +347,8 @@ Two traps are worth knowing, because both were hit while cross-checking this by 
 `@semantic-release/git` is a **prefix of** `@semantic-release/github`, so a grep over the
 config file reports every repository that publishes a GitHub release; the plugins array is
 parsed and compared with string equality instead. And it enumerates from GitHub rather
-than `repos/`, because `whmcs` and `dnscontrol` are usually not checked out — a check
-reading working trees would skip `whmcs`, the one repository the key signal exists for.
+than `repos/`, because `whmcs` is deliberately not checked out, at 2 GB — a check reading
+working trees would skip it, and it is the one repository the key signal exists for.
 
 It also checks every name in `_register.tsv`, including one the organisation listing did
 not return, and fails on it rather than passing quietly. That is deliberately different
