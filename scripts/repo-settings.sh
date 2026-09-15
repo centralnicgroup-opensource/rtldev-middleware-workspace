@@ -388,15 +388,21 @@ ruleset_bypass_label() {
 # The two jq functions the ruleset comparison is built on.
 #
 # `project` keeps, recursively, exactly the keys the wanted value names and nothing else.
-# It exists because GitHub echoes back more than it was sent: a pull_request rule comes
-# back carrying allowed_merge_methods, required_reviewers, dismissal_restriction and
-# require_extra_approval_for_unattributed_changes, and a required_status_checks rule
-# carries do_not_enforce_on_create. None of those is in the payload, and the PUT an apply
-# sends resets them to precisely these values, so comparing them would print a drift line
-# on every repository on every run for ever — which is how a drift report stops being
-# read. Projecting instead of listing the fields to look at is the point: a list is what
-# let every rule in this payload go unverified in the first place, and it would have to be
-# extended by hand the next time a rule is added.
+# It exists because GitHub echoes back more than it was sent: a ruleset carries id, source,
+# source_type, timestamps and _links that no payload names, and a required check comes back
+# with the integration_id of whichever app last reported it while the payload sends only a
+# context. Comparing those would print a drift line on every repository on every run for
+# ever — which is how a drift report stops being read. Projecting instead of listing the
+# fields to look at is the point: a list is what let every rule in this payload go
+# unverified in the first place, and it would have to be extended by hand the next time a
+# rule is added.
+#
+# What projection must never become is an opt-out. It is the payload that decides what is
+# managed, so a parameter left out of the payload is silently unverified — RSRMID-3079,
+# where allowed_merge_methods, require_extra_approval_for_unattributed_changes,
+# required_reviewers, dismissal_restriction and do_not_enforce_on_create were dropped this
+# way and a ruleset set to squash-only on the default branch would have reported clean.
+# Every parameter GitHub returns inside a rule this config manages is now named below.
 #
 # `render` prints a value with its object keys and its array members sorted, so the wanted
 # and the actual rendering compare as strings whatever order GitHub returns them in —
@@ -445,6 +451,32 @@ if [[ "$RULESET_ENABLED" != "true" ]]; then
 else
     bypass_actors=$(ruleset_bypass_json)
 
+    # The ruleset's allowed_merge_methods is derived from the three repository-level merge
+    # flags rather than configured separately, so the merge policy has one source of truth.
+    # Two places to state it is two places to disagree, and the ruleset is the half that
+    # wins: it is evaluated on the default branch, so a method the repository settings
+    # forbid but the ruleset permits is the state that decides what a reviewer can press.
+    # Deriving is also what keeps this honest as a policy — it sends ["rebase"] today
+    # because ALLOW_REBASE_MERGE is the only flag set, not because anyone typed "rebase"
+    # into a second file.
+    #
+    # GitHub rejects an empty list, and a repository that allows no merge method at all is
+    # a repository nobody can merge a pull request in, so it is refused here with the cause
+    # named rather than as a 422 from the PUT.
+    if [[ "$ALLOW_MERGE_COMMIT" != "true" &&
+        "$ALLOW_SQUASH_MERGE" != "true" &&
+        "$ALLOW_REBASE_MERGE" != "true" ]]; then
+        die "ALLOW_MERGE_COMMIT, ALLOW_SQUASH_MERGE and ALLOW_REBASE_MERGE are all false: the ruleset would permit no merge method"
+    fi
+
+    # The other four parameters RSRMID-3079 brought into the payload are stated literally,
+    # like require_code_owner_review and required_review_thread_resolution already were: a
+    # policy with one right answer belongs in the payload, not in a config key nobody would
+    # ever set differently. require_extra_approval_for_unattributed_changes stays on — it is
+    # what makes an approval refer to the diff that was approved. The other three say "no
+    # named reviewers, no dismissal restriction, no exemption for the branch's first push",
+    # which is what every repository has today; naming them is what makes a hand-set one
+    # drift rather than invisible.
     ruleset_body=$(jq -n \
         --arg name "$RULESET_NAME" \
         --argjson bypass_actors "$bypass_actors" \
@@ -453,6 +485,9 @@ else
         --argjson last_push "$REQUIRE_LAST_PUSH_APPROVAL" \
         --argjson linear "$REQUIRE_LINEAR_HISTORY" \
         --argjson signed "$REQUIRE_SIGNED_COMMITS" \
+        --argjson merge_commit "$ALLOW_MERGE_COMMIT" \
+        --argjson squash "$ALLOW_SQUASH_MERGE" \
+        --argjson rebase "$ALLOW_REBASE_MERGE" \
         --arg checks "$REQUIRED_CHECKS" \
         '{
       name: $name,
@@ -469,7 +504,15 @@ else
               dismiss_stale_reviews_on_push: $dismiss,
               require_last_push_approval: $last_push,
               require_code_owner_review: false,
-              required_review_thread_resolution: false
+              required_review_thread_resolution: false,
+              require_extra_approval_for_unattributed_changes: true,
+              required_reviewers: [],
+              dismissal_restriction: { enabled: false, allowed_actors: [] },
+              allowed_merge_methods: (
+                  (if $merge_commit then ["merge"] else [] end)
+                + (if $squash then ["squash"] else [] end)
+                + (if $rebase then ["rebase"] else [] end)
+              )
           } }
         ]
         + (if $linear then [{ type: "required_linear_history" }] else [] end)
@@ -478,6 +521,7 @@ else
             type: "required_status_checks",
             parameters: {
               strict_required_status_checks_policy: true,
+              do_not_enforce_on_create: false,
               required_status_checks: ($checks | split(",") | map({ context: (. | gsub("^ +| +$";"")) }))
             }
           }] else [] end)

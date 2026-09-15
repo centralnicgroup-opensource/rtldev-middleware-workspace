@@ -280,23 +280,25 @@ the bypass list and each rule, keyed on the type GitHub itself discriminates rul
 a rule GitHub has and the config does not is drift too — an apply replaces the rules array
 wholesale and would otherwise remove it without ever having mentioned it. The actual value
 is **projected onto the shape of the wanted one** before the two are compared, because
-GitHub echoes back fields it was never sent (`allowed_merge_methods`, `required_reviewers`,
-`do_not_enforce_on_create`, …). That projection is deliberately not a list of fields to
-look at: a list is what left every rule here unverified in the first place, and it would
-need extending by hand the next time a rule is added.
+GitHub echoes back more than it was sent — a ruleset's `id`, `source` and timestamps, and
+the `integration_id` of whichever app last reported a required check. That projection is
+deliberately not a list of fields to look at: a list is what left every rule here
+unverified in the first place, and it would need extending by hand the next time a rule is
+added.
 
-The projection is also where this stops being complete, which is worth stating plainly.
-The symmetry holds at rule granularity — a rule added or removed by hand is drift either
-way — but not at parameter granularity: a parameter the payload never names is unmanaged
-rather than verified, so someone setting `allowed_merge_methods` to squash-only on the
-default branch, or clearing
-`require_extra_approval_for_unattributed_changes`, is not reported. Every registered
-repository sits at GitHub's defaults for all five today, so nothing is being hidden now,
-but it is a silent opt-out of exactly the kind the `@unmanaged` rule exists to prevent
-elsewhere. RSRMID-3079 is whether to close it by naming those fields in the payload — which
-is a policy question, not a mechanical one, because the ruleset currently permits merge and
-squash on the default branch while `ALLOW_SQUASH_MERGE=false` and `ALLOW_MERGE_COMMIT=false`
-restrict it at repository level.
+Projection decides what is _compared_; the payload decides what is _managed_. Until
+RSRMID-3079 the symmetry therefore held at rule granularity — a rule added or removed by
+hand was drift either way — but not at parameter granularity: five parameters inside rules
+the config does manage were never named, so someone setting `allowed_merge_methods` to
+squash-only on the default branch, or clearing
+`require_extra_approval_for_unattributed_changes`, went unreported. Every parameter GitHub
+returns inside a managed rule is now in the payload, which makes the merge policy the one
+real decision in that change. It is no longer stated twice: the ruleset's
+`allowed_merge_methods` is derived from `ALLOW_MERGE_COMMIT`, `ALLOW_SQUASH_MERGE` and
+`ALLOW_REBASE_MERGE`, so the baseline's rebase-only policy is now enforced on the default
+branch rather than only at repository level. **Applying is a tightening on every repository
+at once** — each ruleset moves from merge/squash/rebase to rebase alone — so the first
+org-wide apply after this change is a deliberate one, not a routine reconciliation.
 
 ### Retiring a repository
 
