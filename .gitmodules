@@ -62,3 +62,7 @@
 	path = repos/centralnicgroup/rtldev-middleware-blesta-src
 	url = https://github.com/centralnicgroup/rtldev-middleware-blesta-src.git
 	branch = main
+[submodule "repos/centralnicgroup/rtldev-middleware-mcp"]
+	path = repos/centralnicgroup/rtldev-middleware-mcp
+	url = https://github.com/centralnicgroup/rtldev-middleware-mcp.git
+	branch = main
