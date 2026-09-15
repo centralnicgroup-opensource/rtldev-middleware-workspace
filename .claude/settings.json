@@ -33,7 +33,8 @@
       "Bash(./scripts/ws.sh pull *)",
       "Bash(./scripts/ws.sh help)",
       "Bash(./scripts/org-settings.sh --apply *)",
-      "Bash(pnpm repo:settings:apply *)"
+      "Bash(pnpm repo:settings:apply *)",
+      "Bash(./scripts/org-settings.sh --apply)"
     ]
   },
   "env": {
