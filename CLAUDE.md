@@ -105,12 +105,17 @@ change that loses someone's work at the scale of every repository at once.
   apply 404 while never creating the repository-level ruleset, and make a check read the
   organisation's empty bypass list and report an unprotected repository as clean.
 - **A check compares the payload an apply would send, never a list of fields.** The wanted
-  ruleset body is the specification; the actual one is projected onto its shape and
-  compared whole — enforcement, conditions, bypass actors and every rule — so a rule added
-  by hand is drift, and one removed by hand is too. A per-field list is what left every
-  rule in that payload unverified until RSRMID-3077, and the projection is what keeps the
-  fields GitHub echoes back but was never sent (`allowed_merge_methods`,
-  `do_not_enforce_on_create`) from becoming a permanent drift line on every repository.
+  ruleset body is the specification; the actual one is projected onto its shape — every key
+  the payload names, recursively, and nothing else — so a rule added by hand is drift, and
+  one removed by hand is too. A per-field list is what left every rule in that payload
+  unverified until RSRMID-3077, and the projection is what keeps the fields GitHub echoes
+  back but was never sent from becoming a permanent drift line on every repository.
+  **The symmetry is at rule granularity, not parameter granularity**: a ruleset _parameter_
+  the payload does not name — `allowed_merge_methods`,
+  `require_extra_approval_for_unattributed_changes`, `required_reviewers`,
+  `dismissal_restriction`, `do_not_enforce_on_create` — is unmanaged rather than verified,
+  and one set by hand is not reported. That is the one opt-out here that is not spelled
+  `@unmanaged`; RSRMID-3079 is whether to close it by naming those fields in the payload.
 - **A settings field with no opinion is `@unmanaged`, never `""`.** An empty value is a
   request to blank the field, and an org-wide apply would blank it everywhere at once.
   Only `DESCRIPTION`, `HOMEPAGE` and `TOPICS` may opt out; every other setting is a

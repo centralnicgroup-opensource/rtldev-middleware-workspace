@@ -281,10 +281,22 @@ a rule GitHub has and the config does not is drift too — an apply replaces the
 wholesale and would otherwise remove it without ever having mentioned it. The actual value
 is **projected onto the shape of the wanted one** before the two are compared, because
 GitHub echoes back fields it was never sent (`allowed_merge_methods`, `required_reviewers`,
-`do_not_enforce_on_create`, …) and an apply resets them to exactly those values. That
-projection is deliberately not a list of fields to look at: a list is what left every rule
-here unverified in the first place, and it would need extending by hand the next time a
-rule is added.
+`do_not_enforce_on_create`, …). That projection is deliberately not a list of fields to
+look at: a list is what left every rule here unverified in the first place, and it would
+need extending by hand the next time a rule is added.
+
+The projection is also where this stops being complete, which is worth stating plainly.
+The symmetry holds at rule granularity — a rule added or removed by hand is drift either
+way — but not at parameter granularity: a parameter the payload never names is unmanaged
+rather than verified, so someone setting `allowed_merge_methods` to squash-only on the
+default branch, or clearing
+`require_extra_approval_for_unattributed_changes`, is not reported. Every registered
+repository sits at GitHub's defaults for all five today, so nothing is being hidden now,
+but it is a silent opt-out of exactly the kind the `@unmanaged` rule exists to prevent
+elsewhere. RSRMID-3079 is whether to close it by naming those fields in the payload — which
+is a policy question, not a mechanical one, because the ruleset currently permits merge and
+squash on the default branch while `ALLOW_SQUASH_MERGE=false` and `ALLOW_MERGE_COMMIT=false`
+restrict it at repository level.
 
 ### Retiring a repository
 
