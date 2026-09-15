@@ -408,6 +408,11 @@ RULESET_JQ='
               reduce ($want | keys_unsorted[]) as $k
                   ({}; .[$k] = ($got[$k] | project($want[$k])))
           elif ($want | type) == "array" and ($got | type) == "array" then
+              # Every element is projected onto the wanted array'"'"'s first element, which holds
+              # only because every array this payload builds is homogeneous — a list of
+              # checks, a list of ref patterns. A wanted array of differing shapes would
+              # project keys away from the elements that do not appear first, so the one
+              # thing to check when adding a rule is that its arrays stay homogeneous.
               [$got[] | project($want[0])]
           else $got
           end;
@@ -554,6 +559,10 @@ else
                     "$(ruleset_bypass_label <<<"$bypass_actors")" \
                     "$(jq '.bypass_actors // []' <<<"$detail" | ruleset_bypass_label)"
 
+                compare "ruleset target" \
+                    "$(jq -r '.target' <<<"$ruleset_body")" \
+                    "$(jq -r '.target // "absent"' <<<"$detail")"
+
                 compare "ruleset enforcement" \
                     "$(jq -r '.enforcement' <<<"$ruleset_body")" \
                     "$(jq -r '.enforcement // "absent"' <<<"$detail")"
@@ -570,7 +579,8 @@ else
                 # the PUT an apply sends replaces the rules array wholesale and would
                 # remove it without ever having reported it.
                 want_rules=$(jq -c '.rules' <<<"$ruleset_body")
-                got_rules=$(jq -c '.rules // []' <<<"$detail")
+                got_rules=$(jq -c '.rules // []' <<<"$detail") ||
+                    die "cannot parse the ruleset GitHub returned for ${REPO}"
                 while IFS= read -r rule_type; do
                     want_rule=$(jq -c --arg t "$rule_type" \
                         'map(select(.type == $t)) | .[0] // empty' <<<"$want_rules")
