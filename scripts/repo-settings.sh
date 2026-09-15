@@ -385,6 +385,55 @@ ruleset_bypass_label() {
         end'
 }
 
+# The two jq functions the ruleset comparison is built on.
+#
+# `project` keeps, recursively, exactly the keys the wanted value names and nothing else.
+# It exists because GitHub echoes back more than it was sent: a pull_request rule comes
+# back carrying allowed_merge_methods, required_reviewers, dismissal_restriction and
+# require_extra_approval_for_unattributed_changes, and a required_status_checks rule
+# carries do_not_enforce_on_create. None of those is in the payload, and the PUT an apply
+# sends resets them to precisely these values, so comparing them would print a drift line
+# on every repository on every run for ever — which is how a drift report stops being
+# read. Projecting instead of listing the fields to look at is the point: a list is what
+# let every rule in this payload go unverified in the first place, and it would have to be
+# extended by hand the next time a rule is added.
+#
+# `render` prints a value with its object keys and its array members sorted, so the wanted
+# and the actual rendering compare as strings whatever order GitHub returns them in —
+# neither the order of the rules nor the order of the required checks means anything.
+RULESET_JQ='
+    def project($want):
+        . as $got
+        | if ($want | type) == "object" and ($got | type) == "object" then
+              reduce ($want | keys_unsorted[]) as $k
+                  ({}; .[$k] = ($got[$k] | project($want[$k])))
+          elif ($want | type) == "array" and ($got | type) == "array" then
+              [$got[] | project($want[0])]
+          else $got
+          end;
+
+    def render:
+        if type == "object" then
+            "{" + ([to_entries | sort_by(.key)[] | "\(.key)=\(.value | render)"] | join(", ")) + "}"
+        elif type == "array" then
+            "[" + ([.[] | render] | sort | join(", ")) + "]"
+        else tostring
+        end;
+'
+
+# Reads the actual value on stdin, takes the wanted one as an argument, prints the actual
+# one cut down to the shape of the wanted one.
+ruleset_project() {
+    jq -c --argjson want "$1" "$RULESET_JQ"' project($want)'
+}
+
+# A rule as one line. A rule whose entire content is its type — deletion,
+# non_fast_forward, required_linear_history — has nothing to print but the fact that it
+# is there, so it reads as "enforced" rather than as an empty object.
+ruleset_rule_label() {
+    jq -r "$RULESET_JQ"' del(.type) | if length == 0 then "enforced" else render end'
+}
+
 if [[ "$RULESET_ENABLED" != "true" ]]; then
     info "- repository ruleset disabled in config; expecting an organisation ruleset"
     info "  verify: gh api orgs/OWNER/rulesets"
@@ -474,27 +523,72 @@ else
                 info "! ruleset creation failed (admin required)"
         fi
         info "= ruleset bypass actors: $(ruleset_bypass_label <<<"$bypass_actors")"
+        info "= ruleset rules: $(jq -r '[.rules[].type] | sort | join(", ")' <<<"$ruleset_body")"
     else
         compare "ruleset '${RULESET_NAME}'" "present" \
             "$([[ -n "$existing" ]] && echo present || echo absent)"
 
-        # The bypass list is what decides whether the ruleset can be walked around, so it
-        # is compared rather than assumed: an actor added by hand in the web UI is drift
-        # of exactly the shape that makes every other rule here decorative.
+        # Everything the payload says is compared, not just that a ruleset by this name
+        # exists. The bypass list decides whether the ruleset can be walked around, and
+        # the rules are what it is a bypass of: an actor added by hand in the web UI, an
+        # approval count lowered, a required check dropped or renamed are all drift of
+        # exactly the shape that makes every other rule here decorative. Enforcement and
+        # the ref condition are compared for the same reason — a ruleset switched to
+        # "evaluate", or pointed at some other branch, is every rule in it turned off at
+        # once.
+        #
+        # This is also what makes REQUIRED_CHECKS readable rather than write-only. A wrong
+        # value used to surface as every pull request in the repository being unmergeable,
+        # found by whoever opened the next one; now it surfaces here.
         #
         # Fetched per ruleset because the list endpoint returns a summary — bypass_actors
         # and rules appear only on GET /repos/{owner}/{repo}/rulesets/{id}.
-        if [[ -n "$existing" ]]; then
+        if [[ -z "$existing" ]]; then
+            info "- ruleset contents: not comparable, the ruleset itself is absent"
+        else
             detail=$(gh api "repos/${REPO}/rulesets/${existing}" 2>/dev/null || echo "")
-            if [[ -n "$detail" ]]; then
+            if [[ -z "$detail" ]]; then
+                compare "ruleset contents" "-" "unknown"
+            else
                 compare "ruleset bypass actors" \
                     "$(ruleset_bypass_label <<<"$bypass_actors")" \
                     "$(jq '.bypass_actors // []' <<<"$detail" | ruleset_bypass_label)"
-            else
-                compare "ruleset bypass actors" "-" "unknown"
+
+                compare "ruleset enforcement" \
+                    "$(jq -r '.enforcement' <<<"$ruleset_body")" \
+                    "$(jq -r '.enforcement // "absent"' <<<"$detail")"
+
+                want_conditions=$(jq -c '.conditions' <<<"$ruleset_body")
+                compare "ruleset conditions" \
+                    "$(jq -r "$RULESET_JQ"' render' <<<"$want_conditions")" \
+                    "$(jq -c '.conditions // {}' <<<"$detail" |
+                        ruleset_project "$want_conditions" | jq -r "$RULESET_JQ"' render')"
+
+                # Walked over the union of the two rule lists, keyed on the type GitHub
+                # itself discriminates rules by. A rule the config carries and GitHub does
+                # not have is drift; so is one GitHub has and the config does not, because
+                # the PUT an apply sends replaces the rules array wholesale and would
+                # remove it without ever having reported it.
+                want_rules=$(jq -c '.rules' <<<"$ruleset_body")
+                got_rules=$(jq -c '.rules // []' <<<"$detail")
+                while IFS= read -r rule_type; do
+                    want_rule=$(jq -c --arg t "$rule_type" \
+                        'map(select(.type == $t)) | .[0] // empty' <<<"$want_rules")
+                    got_rule=$(jq -c --arg t "$rule_type" \
+                        'map(select(.type == $t)) | .[0] // empty' <<<"$got_rules")
+                    if [[ -z "$want_rule" ]]; then
+                        compare "ruleset rule '${rule_type}'" "not in the config" "present"
+                    elif [[ -z "$got_rule" ]]; then
+                        compare "ruleset rule '${rule_type}'" \
+                            "$(ruleset_rule_label <<<"$want_rule")" "absent"
+                    else
+                        compare "ruleset rule '${rule_type}'" \
+                            "$(ruleset_rule_label <<<"$want_rule")" \
+                            "$(ruleset_project "$want_rule" <<<"$got_rule" | ruleset_rule_label)"
+                    fi
+                done < <(jq -r --argjson got "$got_rules" \
+                    '[.[].type] + [$got[].type] | unique | .[]' <<<"$want_rules")
             fi
-        else
-            info "- ruleset bypass actors: not comparable, the ruleset itself is absent"
         fi
     fi
 

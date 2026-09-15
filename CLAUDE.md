@@ -104,6 +104,13 @@ change that loses someone's work at the scale of every repository at once.
   inherits. Without it, an organisation ruleset sharing the managed name would make an
   apply 404 while never creating the repository-level ruleset, and make a check read the
   organisation's empty bypass list and report an unprotected repository as clean.
+- **A check compares the payload an apply would send, never a list of fields.** The wanted
+  ruleset body is the specification; the actual one is projected onto its shape and
+  compared whole — enforcement, conditions, bypass actors and every rule — so a rule added
+  by hand is drift, and one removed by hand is too. A per-field list is what left every
+  rule in that payload unverified until RSRMID-3077, and the projection is what keeps the
+  fields GitHub echoes back but was never sent (`allowed_merge_methods`,
+  `do_not_enforce_on_create`) from becoming a permanent drift line on every repository.
 - **A settings field with no opinion is `@unmanaged`, never `""`.** An empty value is a
   request to blank the field, and an org-wide apply would blank it everywhere at once.
   Only `DESCRIPTION`, `HOMEPAGE` and `TOPICS` may opt out; every other setting is a

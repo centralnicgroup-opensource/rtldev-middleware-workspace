@@ -265,6 +265,27 @@ read the organisation ruleset's empty bypass list and reported a repository with
 protection of its own as present and clean. Inherited rulesets are printed as context,
 because their rules are enforced as the union with ours, but they are not ours to manage.
 
+A check compares the whole ruleset, not the fact that one exists. Until RSRMID-3077 it
+compared exactly two things — that a ruleset with the managed name was present, and that
+its bypass list matched — so every rule the payload carries was applied and never read
+back: the required checks, the approval count, linear history, signatures, deletion and
+non-fast-forward. Lowering the required approvals in the web UI, or deleting the
+required-checks rule, left the repository reporting "settings match the config" on the
+next weekly run, and `REQUIRED_CHECKS` was effectively write-only — a renamed job or a
+typo surfaced not as drift but as every pull request in that repository being unmergeable,
+found by whoever opened the next one.
+
+What it compares now is the payload an apply would send: enforcement, the ref condition,
+the bypass list and each rule, keyed on the type GitHub itself discriminates rules by, so
+a rule GitHub has and the config does not is drift too — an apply replaces the rules array
+wholesale and would otherwise remove it without ever having mentioned it. The actual value
+is **projected onto the shape of the wanted one** before the two are compared, because
+GitHub echoes back fields it was never sent (`allowed_merge_methods`, `required_reviewers`,
+`do_not_enforce_on_create`, …) and an apply resets them to exactly those values. That
+projection is deliberately not a list of fields to look at: a list is what left every rule
+here unverified in the first place, and it would need extending by hand the next time a
+rule is added.
+
 ### Retiring a repository
 
 When we stop maintaining an `rtldev-middleware-*` repository:
