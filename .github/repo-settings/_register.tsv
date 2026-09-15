@@ -138,3 +138,26 @@ centralnicgroup	rtldev-middleware-whmcs-src	internal,releases-via-deploykey	unen
 # public-only. Both are on RSRMID-3050 rather than fixed here, because they are commits
 # in that repository.
 centralnicgroup	rtldev-middleware-blesta-src	internal,releases-via-deploykey	internal source for the Blesta integration; releasing since 6.1.0 on 2026-09-11 (TEMPLATE-SETUP.md still present, RSRMID-3059)
+
+# rtldev-middleware-mcp is the remote MCP server exposing domain availability over RDAP
+# (RSRMID-2947). It reached this register the long way round: the work started as
+# centralnicgroup/rtldev-middleware-mcp-dis, a private fork of piotrnowicki1/mcp-dis, and a
+# fork cannot be detached through the API — GitHub's "Leave fork network" button is
+# public-only, under 1 GB, and no child forks. So on 2026-09-15 the history was mirrored
+# into a repository created fresh, which is fork-free by construction. The fork itself is
+# untouched and stays in repos-exclude.tsv as the third-party fork it is; this row is the
+# repository we develop.
+#
+# It is private and in centralnicgroup, so none of the public-only settings are readable
+# here — that is the "unreadable, not drift" case the baseline already handles, not a
+# reason to withhold the profile.
+#
+# releases-via-deploykey is carried ahead of the first release. The deploy key
+# `semantic-release` (id 163369669, ed25519, installed 2026-09-15) is the only key on the
+# repository and its private half is the repository secret RTLDEV_MW_CI_SSH_KEY, so the
+# invariant deploykey-policy.sh checks — the trait against exactly one write-enabled key —
+# holds today. What does not exist yet is the release config itself: the mirror carries no
+# .releaserc.json and no release workflow, and RSRMID-2957 is where that lands. The policy
+# check is satisfied either way; it fails on a release config or a write key *without* the
+# trait, never on the trait arriving first.
+centralnicgroup	rtldev-middleware-mcp	internal,releases-via-deploykey	private MCP server; fork-free mirror of the mcp-dis fork (RSRMID-2947), release config still to come (RSRMID-2957)
