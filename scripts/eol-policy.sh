@@ -41,6 +41,12 @@
 #
 # The literal value "latest" always passes without an API call, as it did before.
 #
+# A MAX_CYCLE of "lts" is not a cycle name but a ceiling resolved per run: the newest
+# release the product marks as long-term support. It is what lets a toolchain that rides
+# the LTS train stay clean when a non-LTS cycle appears, while still reporting the next
+# LTS the day it ships. If the product marks no release as LTS it is a failure, the same
+# as a misspelt bound — never an unbounded pass.
+#
 # A fourth thing can go wrong before any of those, and is reported as a failure rather than
 # drift: the policy can name the product indirectly, as @VARIABLE, and that variable can be
 # unset or hold a value POLICY_PRODUCT_MAP does not translate. Nothing is assumed in that
@@ -247,13 +253,39 @@ check_one() {
       --argjson inputs "$cycles" \
       --arg min "$([ "$min" = "-" ] && printf '' || printf '%s' "$min")" \
       --arg max "$([ "$max" = "-" ] && printf '' || printf '%s' "$max")" '
+      # A cycle name ordered as a version rather than as a string, so that 8 sorts below
+      # 11. A segment that is not a number sorts below every number rather than throwing,
+      # which keeps the comparison total for a product that names a cycle unconventionally.
+      def vkey($n): ($n | split(".") | map(tonumber? // -1));
       ([.result.releases[]
-        | {name: (.name | tostring), isEol: (.isEol == true), eolFrom: (.eolFrom // "")}]
+        | {name: (.name | tostring), isEol: (.isEol == true),
+           isLts: (.isLts == true), eolFrom: (.eolFrom // "")}]
         | reverse) as $rel
     | ($rel | map(.name)) as $names
     | ($rel | map({key: .name, value: .}) | from_entries) as $info
     | (if $min == "" then 0 else ($names | index($min)) end) as $minIdx
-    | (if $max == "" then (($names | length) - 1) else ($names | index($max)) end) as $maxIdx
+    # "lts" is a ceiling that moves: the newest cycle the product itself marks as
+    # long-term support, not a number we have to come back and edit. No match is null,
+    # which falls through to the same stale-bound failure a misspelt cycle gets — a
+    # product with no LTS releases must not read as unbounded.
+    #
+    # "Newest" has to be settled, because the two orderings available here can disagree.
+    # The window is bounded by array position, and the array is release-date order, which
+    # is not version order: azul-zulu really does carry cycle 6 after cycle 7, both marked
+    # LTS, because Azul published its 6 builds later. An older LTS backfilled above the
+    # newest one would land the ceiling at a high position but a low version, and a
+    # position used as a bound would then widen the window instead of narrowing it —
+    # reporting a non-LTS cycle as missing, and telling a single-version variable to move
+    # backwards. So the two orderings must agree, and a product where they do not is a
+    # failure rather than an answer picked from one of them.
+    | [range(0; $names | length) | select($rel[.].isLts)] as $ltsIdx
+    | ($ltsIdx | last) as $ltsByPosition
+    | (if ($ltsIdx | length) == 0 then null
+       else ($ltsIdx | max_by(vkey($names[.]))) end) as $ltsByVersion
+    | ($ltsByPosition != null and $ltsByPosition != $ltsByVersion) as $ltsAmbiguous
+    | (if $max == "" then (($names | length) - 1)
+       elif $max == "lts" then (if $ltsAmbiguous then null else $ltsByPosition end)
+       else ($names | index($max)) end) as $maxIdx
     | [$inputs[] | . as $c | select(($names | index($c)) == null)] as $unknown
     | (if ($minIdx == null or $maxIdx == null) then []
        else [$inputs[] | . as $c | ($names | index($c)) as $ci
@@ -265,6 +297,10 @@ check_one() {
     | {
         minOk: ($minIdx != null),
         maxOk: ($maxIdx != null),
+        maxResolved: (if $maxIdx == null then "" else $names[$maxIdx] end),
+        ltsAmbiguous: $ltsAmbiguous,
+        ltsByPosition: (if $ltsByPosition == null then "" else $names[$ltsByPosition] end),
+        ltsByVersion: (if $ltsByVersion == null then "" else $names[$ltsByVersion] end),
         unknown: $unknown,
         outside: $outside,
         eol: [$inputs[] | . as $c | select(($names | index($c)) != null)
@@ -288,9 +324,20 @@ check_one() {
   fi
   if [ "$(jq -r '.maxOk' <<<"$analysis")" != "true" ]; then
     FAILED+=("$variable")
-    printf '%-30s %s\n' "$variable" "MAX_CYCLE '$max' does not exist for $product — the policy bound is stale"
+    if [ "$max" = "lts" ] && [ "$(jq -r '.ltsAmbiguous' <<<"$analysis")" = "true" ]; then
+      printf '%-30s %s\n' "$variable" \
+        "MAX_CYCLE 'lts' is ambiguous for $product — its newest LTS by release date is $(jq -r '.ltsByPosition' <<<"$analysis"), by version $(jq -r '.ltsByVersion' <<<"$analysis"); refusing to pick one"
+    elif [ "$max" = "lts" ]; then
+      printf '%-30s %s\n' "$variable" "MAX_CYCLE 'lts' resolved to nothing — $product marks no release as long-term support"
+    else
+      printf '%-30s %s\n' "$variable" "MAX_CYCLE '$max' does not exist for $product — the policy bound is stale"
+    fi
     return
   fi
+
+  # A moving ceiling is only readable if the report says where it currently sits.
+  local max_label="$max"
+  [ "$max" = "lts" ] && max_label="lts ($(jq -r '.maxResolved' <<<"$analysis"))"
 
   invalid="$(jq -r '.unknown | join(", ")' <<<"$analysis")"
   outside="$(jq -r '.outside | join(", ")' <<<"$analysis")"
@@ -302,7 +349,7 @@ check_one() {
 
   local drift=()
   [ -n "$invalid" ] && drift+=("unknown cycle for $product: $invalid")
-  [ -n "$outside" ] && drift+=("outside the policy window ${min}..${max}: $outside")
+  [ -n "$outside" ] && drift+=("outside the policy window ${min}..${max_label}: $outside")
   [ -n "$eol" ] && drift+=("reached end of life: $eol")
   if [ "$n_in" -gt 1 ]; then
     [ -n "$missing" ] && drift+=("matrix is missing supported cycles: $missing")
@@ -312,7 +359,11 @@ check_one() {
 
   if [ "${#drift[@]}" -eq 0 ]; then
     CLEAN=$((CLEAN + 1))
-    [ "$VERBOSE" -eq 1 ] && printf '%-30s %s\n' "$variable" "ok ($product $raw)"
+    # Name the resolved ceiling on the clean line too, not only when something drifts: a
+    # bound that moves on its own is one nobody can check after the fact unless the run
+    # that passed says where it sat.
+    [ "$VERBOSE" -eq 1 ] && printf '%-30s %s\n' "$variable" \
+      "ok ($product $raw$([ "$max" = "lts" ] && printf ', ceiling %s' "$max_label"))"
     return
   fi
 
