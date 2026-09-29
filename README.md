@@ -109,6 +109,31 @@ and answers for the whole namespace. `ws.sh` puts it in force for its own networ
 whether or not you have run `--install`; `--install` is for the git commands you type
 yourself.
 
+### `RTLDEV_MW_CI_TOKEN`: four copies, not two
+
+CI's PAT is an organisation secret, but it lives in **two stores per organisation**. A run
+that Dependabot triggered reads the organisation's _Dependabot_ secrets and never its
+Actions secrets. So a rotation updates four places:
+
+| Organisation                 | Store      | Read by                                                  |
+| ---------------------------- | ---------- | -------------------------------------------------------- |
+| `centralnicgroup-opensource` | Actions    | releases, the nightly refresh and its auto-merge         |
+| `centralnicgroup-opensource` | Dependabot | auto-merge of Dependabot PRs                             |
+| `centralnicgroup`            | Actions    | releases, the nightly refresh and its auto-merge         |
+| `centralnicgroup`            | Dependabot | auto-merge of Dependabot PRs in `whmcs-src`/`blesta-src` |
+
+A copy that is missed fails in the job that reads it and nowhere else. RSRMID-3086 was the
+Dependabot copies going stale for weeks while the Actions copies worked: about 20
+dependency PRs were stranded, each with every real check green. Since RSRMID-3099 the
+shared `auto-merge-dependabot-pr.yml` checks the token before merging. It comments on the
+PR when the token is empty, rejected or belongs to the other organisation, names the store
+the run read, and warns in the run from 14 days before the token expires.
+
+Replacing it with `GITHUB_TOKEN` is not an option. GitHub merges as whoever enabled
+auto-merge, and a push made by `GITHUB_TOKEN` starts no workflow run. go-sdk, python-sdk and
+semantic-release-plugins commit production bumps as `fix(deps)` and release them from the
+push that follows the merge. With `GITHUB_TOKEN`, those fixes would merge and never ship.
+
 ## A cross-repository change, start to finish
 
 ```sh
