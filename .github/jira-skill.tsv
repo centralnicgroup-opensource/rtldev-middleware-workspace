@@ -1,0 +1,36 @@
+# The per-repository block of every copy of the jira-conventions skill.
+#
+# Tab-separated: <repository>\t<title prefix>\t<component id>\t<component>\t<note>
+#
+# The skill's shared body lives in rtldev-middleware-template; scripts/jira-skill-policy.sh
+# renders each repository's copy as that body plus the row below, and the weekly
+# jira-skill-policy-drift.yml job fails on any copy that differs. Every repository
+# .gitmodules registers, and this workspace itself, needs a row — a repository without one
+# is drift, so a newly registered repository cannot silently go without the skill.
+#
+# <note> is "-" for none, otherwise one extra bullet in the rendered block.
+# <title prefix> "@skip" leaves a repository out on purpose; <note> then says why.
+#
+# The template's own row holds the template's {{TOKENS}}, so a repository created from it
+# starts with placeholders to fill in, the same as its CLAUDE.md.
+#
+# Component ids are the RSRMID project's component list. A new -sdk repository takes its
+# name uppercased as the prefix, and SDKs (10230) when Jira has no component for it yet.
+rtldev-middleware-template	{{JIRA_PREFIX}}	{{JIRA_COMPONENT_ID}}	{{JIRA_COMPONENT}}	{{JIRA_NOTE}}
+rtldev-middleware-workspace	TECH DEBT	11973	Dev Container | Workspace | CI/CD	For a fix that lands in a submodule, use that repository's row from the list below.
+rtldev-middleware-whmcs	WHMCS	10254	WHMCS SW Bundle	Use the component WHMCS IBS/Moniker (`10257`) instead when the Business Unit is Internet.bs or Moniker.
+rtldev-middleware-whmcs-src	WHMCS	10254	WHMCS SW Bundle	Use the component WHMCS IBS/Moniker (`10257`) instead when the Business Unit is Internet.bs or Moniker.
+rtldev-middleware-blesta	BLESTA	11535	Blesta	-
+rtldev-middleware-blesta-src	BLESTA	11535	Blesta	-
+rtldev-middleware-dnscontrol-dnsconfig	DNSCONTROL	10225	DNSControl (build-in)	-
+rtldev-middleware-go-sdk	GO-SDK	10231	GO-SDK	-
+rtldev-middleware-java-sdk	JAVA-SDK	10228	JAVA-SDK	-
+rtldev-middleware-node-sdk	NODE-SDK	10226	NODE-SDK	-
+rtldev-middleware-php-sdk	PHP-SDK	10232	PHP-SDK	-
+rtldev-middleware-python-sdk	PYTHON-SDK	10229	PYTHON-SDK	-
+rtldev-middleware-idna-uts46	IDNA	10244	IDNA-UTS46	-
+rtldev-middleware-php-idna-translator	IDNA	10244	IDNA-UTS46	-
+rtldev-middleware-semantic-release-plugins	TECH DEBT	10243	Semantic Release Plugins	-
+rtldev-middleware-devcontainer-features	TECH DEBT	11973	Dev Container | Workspace | CI/CD	-
+rtldev-middleware-shareable-workflows	TECH DEBT	11973	Dev Container | Workspace | CI/CD	-
+rtldev-middleware-mcp	@skip	-	-	Its CLAUDE.md still prescribes ADF and its backlog still lives in JIRA.md; revisit once that is imported into Jira.

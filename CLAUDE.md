@@ -74,9 +74,10 @@ change that loses someone's work at the scale of every repository at once.
   Commits with a scope.
 - Only `push`, `pr` and `add --apply` write anything. `status`, `sync`, `pull`, `grep`,
   `foreach` and `add` must stay safe to run at any time. `org-settings.sh` writes only
-  with `--apply`, and `node-policy.sh`, `deploykey-policy.sh` and `eol-policy.sh` have no
-  write mode at all — a manifest edit, a deploy key or an organisation variable is changed
-  where it lives, in its own history and review, never in a bulk apply from here.
+  with `--apply`, and `node-policy.sh`, `deploykey-policy.sh`, `eol-policy.sh` and
+  `jira-skill-policy.sh` have no write mode at all — a manifest edit, a deploy key, an
+  organisation variable or a skill copy is changed where it lives, in its own history and
+  review, never in a bulk apply from here.
 - Discovery that returns nothing is an error, not "zero repositories" — an API blip must
   never be read as "everything was deleted". **Per namespace**, not just overall: a
   fine-grained PAT answers a listing for any other organisation with `[]` rather than an
@@ -147,6 +148,7 @@ shellcheck --severity=warning scripts/*.sh .devcontainer/*.sh
 ./scripts/node-policy.sh                   # read-only, needs an org-wide token
 ./scripts/deploykey-policy.sh              # read-only, needs deploy-key read scope
 ./scripts/eol-policy.sh --from-api         # read-only, needs an org-owned token
+./scripts/jira-skill-policy.sh --local     # read-only, compares the local checkouts
 pnpm prettier
 ```
 
@@ -208,6 +210,13 @@ of `npx` for a package that is genuinely not a dependency.
   `devcontainer-lock.json` is a warning rather than a failure, since only an actual
   container rebuild can produce one. Like the others, **no `pull_request` trigger** and
   no write mode.
+- `jira-skill-policy-drift.yml` runs weekly and **fails** when a repository's
+  `.claude/skills/jira-conventions/SKILL.md` is not byte-identical to the template's copy
+  with that repository's block rendered from `.github/jira-skill.tsv`, or when a
+  registered repository has no row there. The shared body lives in
+  `rtldev-middleware-template`, the per-repository values here; neither is edited in a
+  copy. `--render <repo>` prints a copy to stdout — the script itself never writes one.
+  Like the others, **no `pull_request` trigger** and no write mode.
 - **Devcontainer:** the frame is in `.devcontainer/`; shared behaviour comes from the
   `devbase` Feature by version. Never fork its scripts here. No language runtimes are
   installed — that is a decision, not an omission (see README).
@@ -222,7 +231,7 @@ of `npx` for a package that is genuinely not a dependency.
   pointing at a commit that exists only on one machine is a broken workspace for
   everyone else.
 - **Branch creation:** `git checkout main && git pull --ff-only` before `git checkout -b`.
-- **Branch naming:** prefix with the Jira issue ID — `RSRMID-1234/short-description`.
+- **Branch naming:** prefix with the Jira issue ID — `RSRMID-1234-short-description`.
   The same branch name is used across the submodules a change touches; `ws.sh branch`
   exists to keep them identical.
 - **Merging:** rebase-merge (`gh pr merge --rebase`).
@@ -251,11 +260,11 @@ of `npx` for a package that is genuinely not a dependency.
 Work is tracked in **Jira Cloud**, project `RSRMID` — not GitHub Issues (which are
 disabled on this repository).
 
-- **Descriptions must be ADF** (Atlassian Document Format, JSON) — never markdown, which
-  renders literal `\n`.
-- **Log time before Done:** an issue will not stay in **Done** without a worklog —
-  automation stamps `missing-time-spent` and reopens it. Sequence: (1) add worklog;
-  (2) remove the label; (3) transition to Done.
+**Load the `jira-conventions` skill** before creating, editing or transitioning an issue: it
+carries the required fields, the `[COMPONENT][BU]: ` title prefix and component of every
+repository, the parent epic, the Markdown description format and the worklog rule for Done
+and Cancelled. Never edit `.claude/skills/jira-conventions/SKILL.md` by hand — change the template's
+copy or `.github/jira-skill.tsv`, then re-render (see `jira-skill-policy-drift.yml` above).
 
 ## Tool-Output Hygiene
 
