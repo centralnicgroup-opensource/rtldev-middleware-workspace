@@ -210,8 +210,16 @@ cmd_pull() {
       continue
     fi
 
-    if ! git -C "$dir" checkout --quiet "$branch" 2>/dev/null; then
+    # Only a missing branch is an absence. A checkout that fails with the branch present
+    # (a lazy blob fetch on a partial clone without a token, a locked index) is a failure,
+    # and git's stderr stays visible so the cause reaches the log.
+    if ! git -C "$dir" show-ref --verify --quiet "refs/heads/$branch"; then
       printf '%sskipped: no local branch %s%s\n' "$C_YEL" "$branch" "$C_OFF"
+      continue
+    fi
+    if ! ws_git -C "$dir" checkout --quiet "$branch"; then
+      FAILED+=("$short")
+      printf '%scould not check out %s%s\n' "$C_RED" "$branch" "$C_OFF"
       continue
     fi
 
@@ -327,7 +335,7 @@ cmd_grep() {
 cmd_branch() {
   local name="${1:-}"
   shift || true
-  [ -n "$name" ] || ws_die "usage: ws.sh branch <RSRMID-1234/short-description> [repo...]"
+  [ -n "$name" ] || ws_die "usage: ws.sh branch <RSRMID-1234-short-description> [repo...]"
 
   local full short dir base
   while IFS= read -r full; do
@@ -342,18 +350,23 @@ cmd_branch() {
     fi
 
     if git -C "$dir" show-ref --verify --quiet "refs/heads/$name"; then
-      git -C "$dir" checkout --quiet "$name" && printf 'switched to existing %s\n' "$name"
+      if ws_git -C "$dir" checkout --quiet "$name"; then
+        printf 'switched to existing %s\n' "$name"
+      else
+        FAILED+=("$short")
+        printf '%scould not check out %s%s\n' "$C_RED" "$name" "$C_OFF"
+      fi
       continue
     fi
 
     # Branch off the freshly pulled tracked branch, never off whatever happened to be
     # checked out — CLAUDE.md's rule, enforced here so it cannot be forgotten at scale.
-    if ! git -C "$dir" checkout --quiet "$base" || ! ws_git -C "$dir" pull --ff-only --quiet; then
+    if ! ws_git -C "$dir" checkout --quiet "$base" || ! ws_git -C "$dir" pull --ff-only --quiet; then
       FAILED+=("$short")
       printf '%scould not update %s%s\n' "$C_RED" "$base" "$C_OFF"
       continue
     fi
-    if git -C "$dir" checkout --quiet -b "$name"; then
+    if ws_git -C "$dir" checkout --quiet -b "$name"; then
       printf 'created %s from %s\n' "$name" "$base"
     else
       FAILED+=("$short")
@@ -763,7 +776,7 @@ Environment
 A typical cross-repository change:
   ./scripts/ws.sh sync
   ./scripts/ws.sh pull
-  ./scripts/ws.sh branch RSRMID-1234/bump-node
+  ./scripts/ws.sh branch RSRMID-1234-bump-node
   ./scripts/ws.sh foreach 'sed -i s/lts.20/lts.22/ .github/workflows/*.yml'
   ./scripts/ws.sh status
   ./scripts/ws.sh commit 'ci(workflows): move to Node 22'
