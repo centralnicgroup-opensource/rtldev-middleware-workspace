@@ -1,0 +1,51 @@
+---
+# Reports when any repository's copy of the jira-conventions Claude Code skill differs from
+# what .github/jira-skill.tsv says it should be, or when a registered repository has no row
+# there at all.
+#
+# The skill's shared body lives in rtldev-middleware-template and is copied into every
+# repository so it loads where the work happens. Copies drift unless something compares
+# them: each repository's expected file is the template with its per-repository block
+# rendered from its row, and this job compares that byte for byte.
+#
+# Read-only by construction — scripts/jira-skill-policy.sh has no write mode at all. Its
+# --render prints the expected file; bringing a repository into line is a commit there.
+name: Jira skill policy drift
+
+on:
+  schedule:
+    # Monday morning, behind the settings (06:00), register (06:30), Node (07:00),
+    # deploy-key (07:30) and devbase (08:00) jobs so six failures do not arrive as one
+    # indistinguishable batch.
+    - cron: "30 8 * * 1"
+  workflow_dispatch:
+
+# No pull_request trigger, matching the sibling drift jobs. It fails on the state of *other*
+# repositories' skill files, which no pull request here can fix, so a PR trigger would make
+# this repository's pull requests red for reasons they do not own. Run it by hand
+# (workflow_dispatch, or scripts/jira-skill-policy.sh --local) when changing the register.
+
+permissions:
+  contents: read
+
+jobs:
+  drift:
+    name: Jira skill policy drift
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      # GITHUB_TOKEN is scoped to THIS repository, so it cannot read another repository's
+      # files at all. RTLDEV_MW_CI_TOKEN and RTLDEV_MW_CI_TOKEN_CNG read across their own
+      # organisation, which is all this needs; neither ever writes anywhere.
+      #
+      # The fallback to GITHUB_TOKEN is deliberate, but it is NOT what makes this safe: that
+      # token can still read *public* repositories in either organisation. What catches a
+      # rotated or missing token is the script itself, which reads each repository before
+      # its skill file, so an unreadable repository is a failure, never "no skill".
+      - name: Check every repository against .github/jira-skill.tsv
+        env:
+          WS_TOKEN_CENTRALNICGROUP_OPENSOURCE: ${{ secrets.RTLDEV_MW_CI_TOKEN }}
+          WS_TOKEN_CENTRALNICGROUP: ${{ secrets.RTLDEV_MW_CI_TOKEN_CNG }}
+          GH_TOKEN: ${{ secrets.RTLDEV_MW_CI_TOKEN || secrets.GITHUB_TOKEN }}
+        run: scripts/jira-skill-policy.sh --verbose

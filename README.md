@@ -138,7 +138,7 @@ push that follows the merge. With `GITHUB_TOKEN`, those fixes would merge and ne
 
 ```sh
 ./scripts/ws.sh pull                                   # every checkout to its tip
-./scripts/ws.sh branch RSRMID-1234/bump-node           # same branch everywhere
+./scripts/ws.sh branch RSRMID-1234-bump-node           # same branch everywhere
 
 ./scripts/ws.sh foreach 'sed -i "s/lts.20/lts.22/" .github/workflows/*.yml'
 ./scripts/ws.sh grep 'lts\.2[02]'                      # verify before committing

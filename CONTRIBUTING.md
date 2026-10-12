@@ -94,7 +94,7 @@ Do **not** add `Co-Authored-By:` trailers.
 - Branch from an up-to-date default branch: `git checkout main && git pull --ff-only`
   before `git checkout -b`. Never branch from a stale local default branch or from
   another feature branch.
-- Name branches after the Jira issue: `RSRMID-1234/short-description`.
+- Name branches after the Jira issue: `RSRMID-1234-short-description`.
 - Include the Jira issue link in the PR description, and add the PR URL as a comment
   on the Jira issue after opening it.
 - **Rebase-merge** (`gh pr merge --rebase`). Squash merges are disabled at the
