@@ -45,17 +45,11 @@
 centralnicgroup-opensource	rtldev-middleware-dnscontrol	third-party fork of StackExchange/dnscontrol; we only forward pull requests to it
 
 # --- centralnicgroup ---------------------------------------------------------
-# Three of the four active rtldev-middleware-* repositories in that namespace; whmcs-src is
-# the only one registered. Archiving already takes a repository out of both registers, so
-# an archived one needs no row here — see the note on whmcs-core below for when one is
-# worth keeping anyway.
-#
-# That this namespace turned out to be almost entirely exclusions is the review working,
-# not the review failing. The department's own tooling lives in
-# centralnicgroup-opensource; what is over here is one release source, plus other people's
-# software and material nobody develops.
+# The active rtldev-middleware-* repositories in that namespace that are not registered;
+# blesta-src, mcp and whmcs-src are. Archiving already takes a repository out of both
+# registers, so an archived one needs no row here — see the note on whmcs-core below for
+# when one is worth keeping anyway.
 centralnicgroup	rtldev-middleware-playground-repo	sandbox, not a product
-centralnicgroup	rtldev-middleware-mcp-dis	third-party fork
 
 # onboarding holds onboarding and practice material, not code we ship or maintain.
 # Registered as `internal` at first and excluded on review, which is what the review was
