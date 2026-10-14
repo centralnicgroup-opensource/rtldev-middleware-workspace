@@ -230,7 +230,11 @@ of `npx` for a package that is genuinely not a dependency.
   and is made **after** the submodule commits are pushed — a superproject commit
   pointing at a commit that exists only on one machine is a broken workspace for
   everyone else.
-- **Branch creation:** `git checkout main && git pull --ff-only` before `git checkout -b`.
+- **Branch creation:** before creating a branch, and again after any PR merges,
+  run `git checkout main && git pull --ff-only` first — it brings in the merged
+  commits and their release tags. Never branch from a stale local `main`, from
+  `origin/main` (it becomes the new branch's upstream) or from another feature
+  branch.
 - **Branch naming:** prefix with the Jira issue ID — `RSRMID-1234-short-description`.
   The same branch name is used across the submodules a change touches; `ws.sh branch`
   exists to keep them identical.
