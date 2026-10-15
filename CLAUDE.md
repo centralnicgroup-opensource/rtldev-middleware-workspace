@@ -270,6 +270,15 @@ repository, the parent epic, the Markdown description format and the worklog rul
 and Cancelled. Never edit `.claude/skills/jira-conventions/SKILL.md` by hand — change the template's
 copy or `.github/jira-skill.tsv`, then re-render (see `jira-skill-policy-drift.yml` above).
 
+Two of its rules apply whether or not the skill is loaded:
+
+- Write every Jira issue key as a link to the issue, never bare:
+  `[RSRMID-1234](https://centralnic.atlassian.net/browse/RSRMID-1234)`.
+  Branch names and commit messages keep the bare key.
+- Once an issue's last pull request has merged and its worklog is in, close it
+  without asking if nothing is left — the skill lists what counts. For a change in a
+  submodule, "nothing left" includes the pin bump here.
+
 ## Tool-Output Hygiene
 
 Every tool result is spent context, and this repository makes it easy to spend a great
