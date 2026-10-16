@@ -254,6 +254,10 @@ of `npx` for a package that is genuinely not a dependency.
   tip also brings in every other commit that landed there since the last bump. That is
   intended: a pin records the commit this workspace tracks, not the commit you wrote. Say
   so in the PR when the span is wide.
+- **The public `whmcs` and `blesta` repositories are written to by their release process
+  only.** Their code is developed in `whmcs-src` and `blesta-src`; the public repositories
+  are what a release publishes. Leave them out of every bulk change — branch, commit, push,
+  PR — unless the request names them explicitly. Reading them is always fine.
 - Each submodule has its own `CLAUDE.md`, linters and conventions — read the one in the
   repository you are editing before changing its code. This file does not govern them.
 - Formatting a submodule's files uses **its** prettier config:

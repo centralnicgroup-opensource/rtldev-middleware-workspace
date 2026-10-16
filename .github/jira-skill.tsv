@@ -18,9 +18,9 @@
 # name uppercased as the prefix, and SDKs (10230) when Jira has no component for it yet.
 rtldev-middleware-template	{{JIRA_PREFIX}}	{{JIRA_COMPONENT_ID}}	{{JIRA_COMPONENT}}	{{JIRA_NOTE}}
 rtldev-middleware-workspace	TECH DEBT	11973	Dev Container | Workspace | CI/CD	For a fix that lands in a submodule, use that repository's row from the list below.
-rtldev-middleware-whmcs	WHMCS	10254	WHMCS SW Bundle	Use the component WHMCS IBS/Moniker (`10257`) instead when the Business Unit is Internet.bs or Moniker.
+rtldev-middleware-whmcs	@skip	-	-	Public distribution repository, written to only by the release process, so it carries no skill copy. Its code is developed in `whmcs-src`: take the prefix and component from that row.
 rtldev-middleware-whmcs-src	WHMCS	10254	WHMCS SW Bundle	Use the component WHMCS IBS/Moniker (`10257`) instead when the Business Unit is Internet.bs or Moniker.
-rtldev-middleware-blesta	BLESTA	11535	Blesta	-
+rtldev-middleware-blesta	@skip	-	-	Public distribution repository, written to only by the release process, so it carries no skill copy. Its code is developed in `blesta-src`: take the prefix and component from that row.
 rtldev-middleware-blesta-src	BLESTA	11535	Blesta	-
 rtldev-middleware-dnscontrol-dnsconfig	DNSCONTROL	10225	DNSControl (build-in)	-
 rtldev-middleware-go-sdk	GO-SDK	10231	GO-SDK	-
