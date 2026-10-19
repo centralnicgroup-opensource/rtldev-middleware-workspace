@@ -237,7 +237,10 @@ of `npx` for a package that is genuinely not a dependency.
   branch.
 - **Branch naming:** prefix with the Jira issue ID — `RSRMID-1234-short-description`.
   The same branch name is used across the submodules a change touches; `ws.sh branch`
-  exists to keep them identical.
+  exists to keep them identical. `.husky/pre-push` rejects any other name, a slug that
+  is not lowercase `[a-z0-9]` with `.`/`-` separators included, except on the default
+  branch; `SKIP_BRANCH_CHECK=1` overrides it for a deliberate exception. There is no
+  `RSRMID-0000` fallback — work without an issue gets one.
 - **Merging:** rebase-merge (`gh pr merge --rebase`).
 
 ## Working inside `repos/`
