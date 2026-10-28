@@ -626,11 +626,27 @@ nothing here for the policy to have an opinion about. A repository using a layou
 does not read at all — a root `.devcontainer.json`, or the multi-configuration layout
 (`.devcontainer/<folder>/devcontainer.json`) — is a different thing again: it fails closed
 as unverified rather than joining that bucket, because "we have no opinion" would be false
-of it. **No committed `devcontainer-lock.json` is a warning, never a failure**, reported
-prominently with exit status 0: without one, the declared major re-resolves to its newest
-patch on every rebuild, which is worth knowing — but a lock file can only be produced by an
-actual container rebuild, something CI cannot do, so failing on it would leave the job
-permanently red for work nobody here can perform.
+of it.
+
+**The lock is part of the policy** (RSRMID-3013), and three things about it are drift:
+
+- **No committed `devcontainer-lock.json`.** Without one, the declared major re-resolves on
+  every rebuild. The lock is the digest pin that stops a republished tag from reaching every
+  container unnoticed.
+- **No `devcontainers` entry in `.github/dependabot.yml`.** Nothing moves the lock, and the
+  container quietly stays on an old devbase. Dependabot does re-resolve a lock behind a
+  moving major tag; the locks that stood still were the ones whose repository never
+  configured it.
+- **A lock behind what `devbase:<major>` resolves to now.** The lock's `resolved` digest is
+  compared with the manifest digest ghcr.io serves for the tag — the value a fresh
+  `devcontainer upgrade` would write, so string equality and no version ordering. An open
+  Dependabot devcontainers PR is named in the line ("merge #340"), so the weekly latency is
+  readable as such.
+
+This was once only a warning, on the belief that a lock needs a container rebuild to
+produce. It does not: `pnpm dlx @devcontainers/cli upgrade --workspace-folder .` writes one
+without Docker. To move an existing lock, delete its devbase entry first — `upgrade` leaves
+an entry that still satisfies its tag where it is.
 
 It enumerates from **both** namespaces via `ws_discover_all`, and consults
 `repos-exclude.tsv` through `ws_is_excluded` for repositories not part of this workspace at

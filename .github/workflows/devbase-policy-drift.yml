@@ -1,7 +1,10 @@
 ---
 # Reports when any rtldev-middleware-* repository's devcontainer is not using the shared
 # devbase Feature, at the current major, with none of the hand-maintained frame it
-# replaces still committed.
+# replaces still committed — and, since RSRMID-3013, with a committed lock that
+# Dependabot's devcontainers ecosystem keeps on what devbase:<major> resolves to now.
+# That comparison asks ghcr.io anonymously for the tag's manifest; if the registry cannot
+# be reached the run fails as "could not run", never as clean.
 #
 # Nothing checked this before RSRMID-3073, and RSRMID-3019 is what that cost: five
 # repositories carried a commit titled "build(devcontainer): migrate onto the shared
