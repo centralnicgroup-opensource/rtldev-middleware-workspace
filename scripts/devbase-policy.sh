@@ -38,7 +38,9 @@
 #   drift   a devcontainer.json exists and disagrees with the policy: no devbase
 #     declaration, the wrong major, a declaration this cannot resolve to a major at all
 #     (no tag, or pinned by digest — see "TAGLESS AND DIGEST-PINNED DECLARATIONS" below),
-#     or leftover frame files still committed. This is the one category a commit in that
+#     leftover frame files still committed, or a lock that is missing, stale, or that
+#     nothing moves (see "THE LOCK IS PART OF THE POLICY" below). This is the one
+#     category a commit in that
 #     repository can fix, and the one RSRMID-3019 needed.
 #
 #   failed   the read itself did not succeed — the repository root, the directory listing
@@ -132,12 +134,34 @@
 # announcing "powerlevel10k and zsh-autosuggestions now come from devbase" must not itself
 # be reported as the clone it is describing the removal of.
 #
-# THE LOCK FILE IS A WARNING, NEVER A FAILURE
+# THE LOCK IS PART OF THE POLICY, AND SO IS WHAT MOVES IT
 #
-# Without a committed devcontainer-lock.json, `devbase:2` re-resolves to the newest 2.x on
-# every rebuild — worth surfacing. But a lock file can only be produced by an actual
-# container rebuild, which CI cannot do, so failing on it would make this job permanently
-# red for work nobody can perform from CI. Reported prominently; exit status ignores it.
+# Three findings, each drift, each fixable by a commit in that repository (RSRMID-3013):
+#
+#   no committed devcontainer-lock.json   `devbase:2` re-resolves to the newest 2.x on
+#     every rebuild. The lock is a digest pin — what stops a compromised or accidentally
+#     republished tag from reaching every container silently — so every frame commits one.
+#
+#   no `devcontainers` entry in .github/dependabot.yml   nothing moves the lock, so it sits
+#     on whatever digest it was written with, and the container comes up correctly on an
+#     old devbase with no log line saying so. Dependabot's devcontainers ecosystem does
+#     re-resolve the lock behind a moving major tag (php-sdk #320, devcontainer-features
+#     #16); the repositories whose locks stood still were the ones that never configured it.
+#     A finding in its own right, never folded into the version comparison.
+#
+#   a lock behind what devbase:<major> resolves to now   compared by digest: the lock's
+#     `resolved` against the manifest digest ghcr.io serves for the tag today — the exact
+#     value a fresh `devcontainer upgrade` would write, so literal equality and no semver
+#     ordering. An open Dependabot devcontainers PR is named in the line, so a lock one
+#     release behind reads as "merge #340" rather than as a new defect every Monday. It is
+#     still drift: until the PR merges, the container is still on the old devbase.
+#
+# This used to be a warning only, on the reasoning that a lock can only come from an actual
+# container rebuild, which CI cannot perform. That was wrong: `pnpm dlx @devcontainers/cli
+# upgrade --workspace-folder .` resolves and writes the lock without a Docker daemon.
+#
+# The registry is asked once, before any repository is checked; if it cannot be read the
+# run is "could not run", never a run where every lock silently compared as current.
 #
 # Read-only, like every policy script here. It never writes to GitHub and never edits a
 # devcontainer.json; bringing a repository into line is a commit someone makes there,
@@ -200,6 +224,9 @@ DEVCONTAINER_DIR=".devcontainer"
 DEVCONTAINER_JSON="$DEVCONTAINER_DIR/devcontainer.json"
 DEVCONTAINER_LOCK="devcontainer-lock.json"
 
+# Dependabot reads either spelling; the first that exists is the one it uses.
+DEPENDABOT_FILES=(".github/dependabot.yml" ".github/dependabot.yaml")
+
 # The non-canonical layout this script cannot read at all — see "NON-CANONICAL LAYOUTS
 # FAIL CLOSED" above. Checked only when .devcontainer/ itself is absent (read_devcontainer_dir's
 # "absent" case), one contents probe per such repository.
@@ -223,7 +250,6 @@ NO_DEVCONTAINER=0
 NO_DEVCONTAINER_NAMES=()
 ARCHIVED=0
 EXCLUDED=0
-LOCK_MISSING=()
 
 # --- arguments ---------------------------------------------------------------
 
@@ -242,6 +268,7 @@ done
 
 ws_need gh "needed to read devcontainer.json from every repository"
 ws_need jq "needed to read the GitHub API"
+ws_need curl "needed to ask ghcr.io what devbase:<major> resolves to"
 [ -f "$POLICY_FILE" ] || ws_die "no policy at $POLICY_FILE"
 
 # shellcheck source=.github/devbase-policy.conf
@@ -346,6 +373,93 @@ read_file() {
     local org="$1" name="$2" path="$3"
     ws_gh "$org" api "repos/$org/$name/contents/$path" --jq '.content' 2>/dev/null | base64 -d 2>/dev/null
 }
+
+# read_file for a path whose absence is itself a finding (dependabot.yml): sets FILE_BODY
+# and FILE_STATUS to "ok", "absent" or "unreadable", the same 404-versus-anything-else split
+# read_devcontainer_dir makes, so an unreadable file is never reported as a missing one.
+FILE_BODY=""
+FILE_STATUS=""
+read_file_status() {
+    local org="$1" name="$2" path="$3" out
+    FILE_BODY=""
+    if ! out="$(ws_gh "$org" api "repos/$org/$name/contents/$path" --jq '.content' 2>"$GH_ERR_FILE")"; then
+        if grep -q '404' "$GH_ERR_FILE"; then FILE_STATUS="absent"; else FILE_STATUS="unreadable"; fi
+        return
+    fi
+    FILE_BODY="$(printf '%s' "$out" | base64 -d 2>/dev/null)"
+    if [ -n "$FILE_BODY" ]; then FILE_STATUS="ok"; else FILE_STATUS="unreadable"; fi
+}
+
+# --- what devbase:<major> resolves to now -------------------------------------
+# Sets CURRENT_DIGEST and CURRENT_VERSION from ghcr.io's manifest for the major tag — an
+# anonymous pull token, since the Feature is a public package. The digest is what a lock's
+# `resolved` must end in to be current; the version is only for the report. See "THE LOCK
+# IS PART OF THE POLICY" in the file header.
+CURRENT_DIGEST=""
+CURRENT_VERSION=""
+resolve_current_devbase() {
+    local image="${FEATURE_BASE#ghcr.io/}" token headers manifest
+    token="$(curl -fsS --max-time 30 "https://ghcr.io/token?scope=repository:$image:pull" | jq -r '.token // empty')" || return 1
+    [ -n "$token" ] || return 1
+    headers="$(mktemp)"
+    manifest="$(curl -fsS --max-time 30 -D "$headers" -H "Authorization: Bearer $token" \
+        -H 'Accept: application/vnd.oci.image.manifest.v1+json' \
+        "https://ghcr.io/v2/$image/manifests/$POLICY_DEVBASE_MAJOR")" || {
+        rm -f "$headers"
+        return 1
+    }
+    CURRENT_DIGEST="$(awk 'tolower($1) == "docker-content-digest:" { print $2 }' "$headers" | tr -d '\r')"
+    rm -f "$headers"
+    CURRENT_VERSION="$(printf '%s' "$manifest" |
+        jq -r '.annotations["dev.containers.metadata"] // empty | fromjson | .version // empty' 2>/dev/null)"
+    [ -n "$CURRENT_DIGEST" ] && [ -n "$CURRENT_VERSION" ]
+}
+
+# The open Dependabot devcontainers PRs of one repository, one "<number>\t<title>" per line,
+# or nothing when there are none. Returns 1 when the listing could not be read, so "none
+# open" is never what a failed read prints.
+open_devcontainers_prs() {
+    local org="$1" name="$2"
+    ws_gh "$org" api "repos/$org/$name/pulls?state=open&per_page=100" --jq '
+        .[]
+        | select(.user.login == "dependabot[bot]" and (.head.ref | startswith("dependabot/devcontainers/")))
+        | "\(.number)\t\(.title)"
+    ' 2>/dev/null
+}
+
+# What the open devcontainers PRs say about devbase, or nothing when none of them is about
+# it. An open PR is only "merge it" if it actually reaches CURRENT_VERSION: a PR raised
+# before the latest release still says "to <older>" and merging it fixes nothing —
+# devcontainer-features #24 read "2.0.1 to 2.0.2" with 2.1.1 already out. Dependabot's
+# title is the signal, and only a title naming the devbase image counts: the ecosystem
+# also raises PRs for the language Features beside it (go, java, php, python), and
+# "go from 1.3.0 to 1.3.1" says nothing about devbase. A grouped title that names no
+# Feature at all ("… with 3 updates") might be either, and is reported as such rather
+# than guessed at.
+describe_prs() {
+    local num title reaches=() stale=() unknown=()
+    while IFS=$'\t' read -r num title; do
+        [ -n "$num" ] || continue
+        case "$title" in
+            *"$FEATURE_BASE from "*" to $CURRENT_VERSION "* | *"$FEATURE_BASE from "*" to $CURRENT_VERSION")
+                reaches+=("#$num")
+                ;;
+            *"$FEATURE_BASE from "*) stale+=("#$num") ;;
+            *" from "*" to "*) ;;
+            *) unknown+=("#$num") ;;
+        esac
+    done <<<"$1"
+    if [ "${#reaches[@]}" -gt 0 ]; then
+        printf 'Dependabot %s reaches %s: merge it' "${reaches[*]}" "$CURRENT_VERSION"
+    elif [ "${#unknown[@]}" -gt 0 ]; then
+        printf 'Dependabot %s open — check whether it reaches %s' "${unknown[*]}" "$CURRENT_VERSION"
+    elif [ "${#stale[@]}" -gt 0 ]; then
+        printf 'Dependabot %s open but stops short of %s — the next weekly run supersedes it' "${stale[*]}" "$CURRENT_VERSION"
+    fi
+}
+
+# Once per repository however many reads in it failed, so `failed: N` counts repositories.
+mark_failed() { [ "${FAILED[${#FAILED[@]} - 1]:-}" = "$1" ] || FAILED+=("$1"); }
 
 # Whether a root .devcontainer.json exists — the layout Fix 7 in the file header refuses to
 # read. Called only on read_devcontainer_dir's "absent" path (there is no .devcontainer/ to
@@ -542,8 +656,91 @@ check_repo() {
     [ "$df_found" -eq 1 ] || [ "$VERBOSE" -ne 1 ] ||
         printf '%-46s no Dockerfile under %s — nothing to check for leftover clones\n' "$name" "$DEVCONTAINER_DIR"
 
-    # --- the lock file: warn, never fail --------------------------------------
-    has_entry "$DIR_ENTRIES" "$DEVCONTAINER_LOCK" || LOCK_MISSING+=("$name")
+    # --- what moves the lock -------------------------------------------------
+    # Checked whether or not a lock is committed yet, so a repository that has neither gets
+    # both lines at once rather than the second only after fixing the first.
+    # dependabot is "yes", "no" or "unknown" — an unreadable file is never read as "no",
+    # which would also turn the stale-lock line below into "re-resolve by hand" advice for a
+    # repository whose entry may well exist.
+    local dep_file dependabot="no"
+    for dep_file in "${DEPENDABOT_FILES[@]}"; do
+        read_file_status "$org" "$name" "$dep_file"
+        case "$FILE_STATUS" in
+            absent) continue ;;
+            unreadable)
+                dependabot="unknown"
+                mark_failed "$name"
+                DRIFT+=("$dep_file could not be read — whether anything moves the lock is unverified")
+                ;;
+            ok)
+                # A literal key match after stripping whole-line comments, quoted or not, a
+                # trailing comment allowed: "devcontainers" is not a prefix of any other
+                # ecosystem name, so unlike the plugins array in deploykey-policy.sh there is
+                # nothing here a match can confuse.
+                if printf '%s\n' "$FILE_BODY" | tr -d '\r' | grep -v '^[[:space:]]*#' |
+                    grep -Eq "^[[:space:]]*(-[[:space:]]*)?package-ecosystem:[[:space:]]*[\"']?devcontainers[\"']?[[:space:]]*(#.*)?$"; then
+                    dependabot="yes"
+                else
+                    DRIFT+=("$dep_file has no devcontainers entry — nothing moves $DEVCONTAINER_DIR/$DEVCONTAINER_LOCK")
+                fi
+                ;;
+        esac
+        break
+    done
+    [ "$FILE_STATUS" != "absent" ] ||
+        DRIFT+=("has no .github/dependabot.yml — nothing moves $DEVCONTAINER_DIR/$DEVCONTAINER_LOCK; add a devcontainers entry")
+
+    # --- the lock itself ------------------------------------------------------
+    if ! has_entry "$DIR_ENTRIES" "$DEVCONTAINER_LOCK"; then
+        DRIFT+=("commits no $DEVCONTAINER_DIR/$DEVCONTAINER_LOCK — devbase:$POLICY_DEVBASE_MAJOR re-resolves on every rebuild; write one with: pnpm dlx @devcontainers/cli upgrade --workspace-folder .")
+    elif [ "$declared" = "$POLICY_DEVBASE_MAJOR" ]; then
+        # Only for the policy major: CURRENT_DIGEST is what devbase:$POLICY_DEVBASE_MAJOR
+        # resolves to, so a lock on any other tag would compare against the wrong release.
+        # Every other declaration shape — another major, tagless, digest-pinned — is drift
+        # already, and its line says what to fix first.
+        local lock lock_version="" lock_digest="" prs
+        lock="$(read_file "$org" "$name" "$DEVCONTAINER_DIR/$DEVCONTAINER_LOCK")"
+        if [ -z "$lock" ]; then
+            mark_failed "$name"
+            DRIFT+=("$DEVCONTAINER_DIR/$DEVCONTAINER_LOCK is listed but could not be read — its devbase version is unverified")
+        else
+            # \x1f, not a tab: a whitespace IFS collapses an empty leading field, so a lock
+            # entry with a digest but no version would shift the digest into lock_version.
+            IFS=$'\x1f' read -r lock_version lock_digest < <(
+                printf '%s' "$lock" | jq -r --arg k "$FEATURE_BASE:$declared" '
+                    .features[$k] // {} | [.version // "", (.resolved // "" | sub("^[^@]*@"; ""))] | join("\u001f")
+                ' 2>/dev/null
+            )
+            if [ -z "$lock_digest" ]; then
+                DRIFT+=("$DEVCONTAINER_DIR/$DEVCONTAINER_LOCK has no resolved entry for devbase:$declared — re-resolve it")
+            elif [ "$lock_digest" != "$CURRENT_DIGEST" ]; then
+                local behind
+                if [ "$lock_version" = "$CURRENT_VERSION" ]; then
+                    # Same version, different digest: the tag was republished under the lock.
+                    # Exactly what the digest pin exists to surface — say so, never round it
+                    # off to "current".
+                    behind="locks devbase $lock_version at ${lock_digest:0:19}…, but devbase:$POLICY_DEVBASE_MAJOR now resolves $CURRENT_VERSION to ${CURRENT_DIGEST:0:19}… — the tag was republished"
+                else
+                    behind="locks devbase ${lock_version:-?}, devbase:$POLICY_DEVBASE_MAJOR resolves to $CURRENT_VERSION"
+                fi
+                local pr_note=""
+                if ! prs="$(open_devcontainers_prs "$org" "$name")"; then
+                    pr_note="could not tell whether a Dependabot PR is open"
+                elif [ -n "$prs" ]; then
+                    pr_note="$(describe_prs "$prs")"
+                fi
+                if [ -n "$pr_note" ]; then
+                    DRIFT+=("$behind — $pr_note")
+                elif [ "$dependabot" = "yes" ]; then
+                    DRIFT+=("$behind — no Dependabot PR open yet (the devcontainers ecosystem runs weekly)")
+                elif [ "$dependabot" = "no" ]; then
+                    DRIFT+=("$behind — re-resolve by hand: delete the devbase entry, then pnpm dlx @devcontainers/cli upgrade --workspace-folder .")
+                else
+                    DRIFT+=("$behind")
+                fi
+            fi
+        fi
+    fi
 
     if [ "${#DRIFT[@]}" -eq 0 ]; then
         CLEAN=$((CLEAN + 1))
@@ -577,6 +774,14 @@ DISCOVERED="$(ws_discover_all)" || exit 2
 # not: there is no per-row fallback here, so a namespace a stale or rotated token cannot see
 # would otherwise just be missing from DISCOVERED, silently, rather than reported.
 (ws_assert_discovery_covers_registers "$DISCOVERED") || exit 2
+
+# Once, before any repository: every lock is compared against this, so not knowing it is
+# "could not run" — see "THE LOCK IS PART OF THE POLICY" in the file header.
+if ! resolve_current_devbase; then
+    ws_warn "could not resolve $FEATURE_BASE:$POLICY_DEVBASE_MAJOR on ghcr.io — no lock can be checked"
+    exit 2
+fi
+ws_info "devbase:$POLICY_DEVBASE_MAJOR resolves to $CURRENT_VERSION ($CURRENT_DIGEST)"
 
 if [ "${#SELECTED[@]}" -gt 0 ]; then
     TARGETS=("${SELECTED[@]}")
@@ -630,12 +835,6 @@ printf 'clean: %d   drifted: %d   failed: %d   no devcontainer: %d   archived: %
 [ "${#NO_DEVCONTAINER_NAMES[@]}" -eq 0 ] || printf 'no devcontainer: %s\n' "${NO_DEVCONTAINER_NAMES[*]}"
 [ "${#DRIFTED[@]}" -eq 0 ] || printf 'drifted: %s\n' "${DRIFTED[*]}"
 [ "${#FAILED[@]}" -eq 0 ] || printf 'failed:  %s\n' "${FAILED[*]}"
-
-if [ "${#LOCK_MISSING[@]}" -gt 0 ]; then
-    printf '\nwarning: no committed %s (devbase:%s re-resolves to the newest %s.x on every rebuild) in %d repositories:\n' \
-        "$DEVCONTAINER_LOCK" "$POLICY_DEVBASE_MAJOR" "$POLICY_DEVBASE_MAJOR" "${#LOCK_MISSING[@]}"
-    printf '  %s\n' "${LOCK_MISSING[*]}"
-fi
 
 [ "${#FAILED[@]}" -eq 0 ] || exit 2
 [ "${#DRIFTED[@]}" -eq 0 ] || exit 1

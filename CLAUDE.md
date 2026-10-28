@@ -206,10 +206,12 @@ of `npx` for a package that is genuinely not a dependency.
   does not declare the `devbase` Feature at the current major, or still commits a
   leftover of the frame it replaces (`.zshrc`, `.czrc`, `.p10k.zsh`, a Dockerfile still
   cloning `powerlevel10k`/`zsh-autosuggestions`, …) — the RSRMID-3019 failure mode, caught
-  by a job at last. Spans both namespaces, needs no register, and a missing
-  `devcontainer-lock.json` is a warning rather than a failure, since only an actual
-  container rebuild can produce one. Like the others, **no `pull_request` trigger** and
-  no write mode.
+  by a job at last. Spans both namespaces and needs no register. It also **fails** on the
+  lock (RSRMID-3013): a frame with no committed `devcontainer-lock.json`, no `devcontainers`
+  entry in `dependabot.yml` to move it, or a lock whose devbase digest is not what
+  `devbase:<major>` resolves to on ghcr.io today — an open Dependabot PR is named, so the
+  weekly latency reads as "merge #N". `pnpm dlx @devcontainers/cli upgrade` writes a lock
+  without Docker. Like the others, **no `pull_request` trigger** and no write mode.
 - `jira-skill-policy-drift.yml` runs weekly and **fails** when a repository's
   `.claude/skills/jira-conventions/SKILL.md` is not byte-identical to the template's copy
   with that repository's block rendered from `.github/jira-skill.tsv`, or when a

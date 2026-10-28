@@ -1,0 +1,23 @@
+# Keeps .devcontainer/devcontainer-lock.json moving. The frame references devbase:2, a
+# moving major tag, and the lock pins the digest it resolved to; Dependabot's devcontainers
+# ecosystem re-resolves that digest when a new 2.x is published. Without this entry nothing
+# moves it and the container silently stays on an old devbase (RSRMID-3013) — the finding
+# scripts/devbase-policy.sh reports for every repository, this one included.
+#
+# Only the devcontainers ecosystem, deliberately: the submodule pins are moved by the
+# nightly refresh, and adding another updater here is a separate decision.
+version: 2
+updates:
+  - package-ecosystem: "devcontainers"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    groups:
+      devcontainers:
+        patterns:
+          - "*"
