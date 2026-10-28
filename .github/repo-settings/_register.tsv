@@ -137,7 +137,7 @@ centralnicgroup	rtldev-middleware-whmcs-src	internal,releases-via-deploykey	unen
 # as dead files, and SECURITY.md advertises private vulnerability reporting, which is
 # public-only. Both are on RSRMID-3050 rather than fixed here, because they are commits
 # in that repository.
-centralnicgroup	rtldev-middleware-blesta-src	internal,releases-via-deploykey	internal source for the Blesta integration; releasing since 6.1.0 on 2026-09-11 (TEMPLATE-SETUP.md still present, RSRMID-3059)
+centralnicgroup	rtldev-middleware-blesta-src	internal,releases-via-deploykey	internal source for the Blesta integration; releasing since 6.1.0 on 2026-09-11
 
 # rtldev-middleware-mcp is the remote MCP server exposing domain availability over RDAP
 # (RSRMID-2947). It reached this register the long way round: the work started as
